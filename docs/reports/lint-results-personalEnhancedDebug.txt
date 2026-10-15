@@ -1,0 +1,184 @@
+/workspace/scratch/1c76f045a166/wo-android/app/build.gradle.kts:68: Warning: A newer version of androidx.sqlite:sqlite than 2.5.2 is available: 2.6.2 [GradleDependency]
+    implementation("androidx.sqlite:sqlite:2.5.2")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "GradleDependency":
+   This detector looks for usages of libraries where the version you are using
+   is not the current stable release. Using older versions is fine, and there
+   are cases where you deliberately want to stick with an older version.
+   However, you may simply not be aware that a more recent version is
+   available, and that is what this lint check helps find.
+
+/workspace/scratch/1c76f045a166/wo-android/app/build.gradle.kts:70: Warning: A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.10.2 is available: 1.11.0 [NewerVersionAvailable]
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/1c76f045a166/wo-android/app/build.gradle.kts:72: Warning: A newer version of com.google.crypto.tink:tink-android than 1.18.0 is available: 1.23.0 [NewerVersionAvailable]
+    implementation("com.google.crypto.tink:tink-android:1.18.0")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "NewerVersionAvailable":
+   This detector checks with a central repository to see if there are newer
+   versions available for the dependencies used by this project. This is
+   similar to the GradleDependency check, which checks for newer versions
+   available in the Android SDK tools and libraries, but this works with any
+   MavenCentral dependency, and connects to the library every time, which
+   makes it more flexible but also much slower.
+
+/workspace/scratch/1c76f045a166/wo-android/app/build.gradle.kts:42: Warning: Missing x86_64 ABI support for ChromeOS [ChromeOsAbiSupport]
+            ndk { abiFilters.clear(); abiFilters += "arm64-v8a" }
+                                                    ~~~~~~~~~~~
+
+   Explanation for issues of type "ChromeOsAbiSupport":
+   To properly support ChromeOS, your Android application should have an x86
+   and/or x86_64 binary as part of the build configuration. To fix the issue,
+   ensure your files are properly optimized for ARM; the binary translator
+   will then ensure compatibility with x86. Alternatively, add an abiSplit for
+   x86 within your build.gradle file and create the required x86
+   dependencies.
+
+   https://developer.android.com/ndk/guides/abis
+
+/workspace/scratch/1c76f045a166/wo-android/app/build.gradle.kts:65: Warning: This library supports using KSP instead of kapt, which greatly improves performance. Learn more: https://developer.android.com/studio/build/migrate-to-ksp [KaptUsageInsteadOfKsp]
+    kapt("androidx.room:room-compiler:2.8.4")
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "KaptUsageInsteadOfKsp":
+   KSP is a more efficient replacement for kapt. For libraries that support
+   both, KSP should be used to improve build times.
+
+   https://developer.android.com/studio/build/migrate-to-ksp
+
+/workspace/scratch/1c76f045a166/wo-android/app/src/main/res/values/strings.xml:1: Warning: The resource R.string.app_name appears to be unused [UnusedResources]
+<resources><string name="app_name">我</string><string name="window_description">仅记录窗口包名与切换时刻；不读取屏幕文字、不操作其他应用。用于本人自动生活记录。</string></resources>
+                   ~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UnusedResources":
+   Unused resources make applications larger and slow down builds.
+
+
+   The unused resource check can ignore tests. If you want to include
+   resources that are only referenced from tests, consider packaging them in a
+   test source set instead.
+
+   You can include test sources in the unused resource check by setting the
+   system property lint.unused-resources.include-tests =true, and to exclude
+   them (usually for performance reasons), use
+   lint.unused-resources.exclude-tests =true.
+   ,
+
+   Available options:
+
+   **skip-libraries** (default is true):
+   Whether the unused resource check should skip reporting unused resources in libraries.
+
+   Many libraries will declare resources that are part of the library surface; other modules depending on the library will also reference the resources. To avoid reporting all these resources as unused (in the context of a library), the unused resource check normally skips reporting unused resources in libraries. Instead, run the unused resource check on the consuming app module (along with `checkDependencies=true`).
+
+   However, there are cases where you want to check that all the resources declared in a library are used; in that case, you can disable the skip option.
+
+   To configure this option, use a `lint.xml` file with an <option> like this:
+
+   ```xml
+   <lint>
+       <issue id="UnusedResources">
+           <option name="skip-libraries" value="true" />
+       </issue>
+   </lint>
+   ```
+
+/workspace/scratch/1c76f045a166/wo-android/app/src/main/kotlin/com/personal/wo/data/WoRepository.kt:64: Warning: Consider also using StorageManager#getAllocatableBytes and allocateBytes which will consider clearable cached data [UsableSpace]
+        val full=used>softLimit*5/4 || context.filesDir.usableSpace<20*1024*1024
+                                                        ~~~~~~~~~~~
+
+   Explanation for issues of type "UsableSpace":
+   When you need to allocate disk space for large files, consider using the
+   new allocateBytes(FileDescriptor, long) API, which will automatically clear
+   cached files belonging to other apps (as needed) to meet your request.
+
+   When deciding if the device has enough disk space to hold your new data,
+   call getAllocatableBytes(UUID) instead of using getUsableSpace(), since the
+   former will consider any cached data that the system is willing to clear on
+   your behalf.
+
+   Note that these methods require API level 26. If your app is running on
+   older devices, you will probably need to use both APIs, conditionally
+   switching on Build.VERSION.SDK_INT. Lint only looks in the same compilation
+   unit to see if you are already using both APIs, so if it warns even though
+   you are already using the new API, consider moving the calls to the same
+   file or suppressing the warning.
+
+/workspace/scratch/1c76f045a166/wo-android/app/src/main/kotlin/com/personal/wo/collector/Capabilities.kt:55: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+        else -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:${c.packageName}"))
+                                                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/1c76f045a166/wo-android/app/src/main/kotlin/com/personal/wo/MainActivity.kt:58: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+    private fun background() { runCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:$packageName"))) }.onFailure { vm.message("请在系统应用设置中将定位设为始终允许") } }
+                                                                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/1c76f045a166/wo-android/app/src/main/kotlin/com/personal/wo/ui/Pages.kt:103: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+        item{Section("资源与运行状态");Paper{Muted("低电与高温自动降频。GNSS每次最多20秒，每小时120秒、每天600秒；没有永久唤醒锁。");TextButton(onClick={runCatching{context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}}){Text("打开系统应用设置")};s.diagnostics.take(10).forEach{Muted(it)};Muted("耗电、后台稳定性与准确性需在目标手机上实际测量。")}}
+                                                                                                                                                                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/1c76f045a166/wo-android/app/src/main/kotlin/com/personal/wo/collector/RecordingService.kt:108: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+        budget.edit().putLong("hour",hour).putInt("hourSeconds",hours+config.gnssBurstSeconds).putString("date",date).putInt("daySeconds",days+config.gnssBurstSeconds).putInt("boot",boot).putLong("lastElapsed",SystemClock.elapsedRealtime()).apply()
+        ~~~~~~~~~~~~~
+/workspace/scratch/1c76f045a166/wo-android/app/src/main/kotlin/com/personal/wo/ui/Visuals.kt:81: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+@Composable fun PhotoThumbnail(uri:String){val c=LocalContext.current;val bitmap by produceState<Bitmap?>(null,uri){value=ThumbnailCache.cache.get(uri)?:withContext(Dispatchers.IO){ThumbnailCache.gate.withPermit{runCatching{c.contentResolver.loadThumbnail(Uri.parse(uri),AndroidSize(512,512),null).also{ThumbnailCache.cache.put(uri,it)}}.getOrNull()}}};if(bitmap!=null)Image(bitmap!!.asImageBitmap(),"关联媒体缩略图",Modifier.fillMaxWidth().heightIn(max=260.dp).clip(RoundedCornerShape(14.dp)),contentScale=ContentScale.Fit)else Text("正在加载或原文件不可访问",Modifier.padding(18.dp))}
+                                                                                                                                                                                                                                                                ~~~~~~~~~~~~~~
+/workspace/scratch/1c76f045a166/wo-android/app/src/main/kotlin/com/personal/wo/data/WoRepository.kt:30: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+    private fun mirror() { context.getSharedPreferences("runtime",0).edit().putBoolean("requested",cachedPolicy.requested).putBoolean("paused",cachedPolicy.paused).apply() }
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UseKtx":
+   The Android KTX libraries decorates the Android platform SDK as well as
+   various libraries with more convenient extension functions available from
+   Kotlin, allowing you to use default parameters, named parameters, and
+   more.
+
+   Available options:
+
+   **remove-defaults** (default is true):
+   Whether to skip arguments that match the defaults provided by the extension.
+
+   Extensions often provide default values for some of the parameters. For example:
+   ```kotlin
+   fun Path.readLines(charset: Charset = Charsets.UTF_8): List<String> { return Files.readAllLines(this, charset) }
+   ```
+   This lint check will by default automatically omit parameters that match the default, so if your code was calling
+
+   ```kotlin
+   Files.readAllLines(file, Charset.UTF_8)
+   ```
+   lint would replace this with
+   ```kotlin
+   file.readLines()
+   ```
+   rather than
+
+   ```kotlin
+   file.readLines(Charset.UTF_8
+   ```
+   You can turn this behavior off using this option.
+
+   To configure this option, use a `lint.xml` file with an <option> like this:
+
+   ```xml
+   <lint>
+       <issue id="UseKtx">
+           <option name="remove-defaults" value="true" />
+       </issue>
+   </lint>
+   ```
+
+   **require-present** (default is true):
+   Whether to only offer extensions already available.
+
+   This option lets you only have lint suggest extension replacements if those extensions are already available on the class path (in other words, you're already depending on the library containing the extension method.)
+
+   To configure this option, use a `lint.xml` file with an <option> like this:
+
+   ```xml
+   <lint>
+       <issue id="UseKtx">
+           <option name="require-present" value="true" />
+       </issue>
+   </lint>
+   ```
+
+0 errors, 13 warnings

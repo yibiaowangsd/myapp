@@ -1,0 +1,205 @@
+# “我” Android 开发说明
+
+文档更新：2026-10-15（Asia/Shanghai）
+
+对应应用版本：1.0.0；数据库版本：Room V1；包名：`com.personal.wo`。
+
+本仓库保存上一轮已编译交付的源码、当前实现设计及原始验证证据。应用逻辑保持该交付版本；本次主要补齐设计与开发文档、文档导航及文件校验清单。
+
+## 1. 阅读入口
+
+- [当前实现设计](Design.md)：页面、来源、两个版本、数据处理与限制。
+- [原始设计基线](Design_Baseline.md)：完整原始需求及 G01—G08 验收标准。
+- [验证报告](Verification.md) / [结构化结果](Verification.json)：已执行与未执行的检查。
+- [原始测试与 Lint 报告](reports/)：本轮源码对应的自动检查证据。
+
+## 2. 环境与固定依赖
+
+| 项目 | 工程固定配置 |
+|---|---|
+| JDK / JVM target | 17 |
+| Android compileSdk / targetSdk / minSdk | 36 / 36 / 29 |
+| Android Build Tools | 36.0.0 |
+| Gradle Wrapper / Android Gradle Plugin | 8.13 / 8.13.2 |
+| Kotlin / Compose compiler plugin | 2.2.21 |
+| Compose BOM | 2025.10.01 |
+| Room + KAPT | 2.8.4 |
+| WorkManager | 2.10.5 |
+| Health Connect | 1.1.0 |
+| SQLCipher Android / AndroidX SQLite | 4.10.0 / 2.5.2 |
+| Coroutines / Serialization JSON | 1.10.2 / 1.9.0 |
+| Tink Android / JVM test Tink | 1.18.0 |
+
+实际完整依赖以 Gradle 文件及 `app/gradle.lockfile`、`core/gradle.lockfile` 为准。Wrapper 分发包有 SHA-256 校验，`gradle/verification-metadata.xml` 保存依赖校验。首次解析依赖需要网络；源码不含 Android SDK 或完整 Maven 缓存。固定版本保持原构建组合，不因上传仓库而更新依赖。
+
+安装 JDK 17 和上述 Android SDK 后，使用 Android Studio 打开仓库根目录。SDK 路径可由本机 `local.properties` 或环境配置提供；`local.properties` 不进入 Git。
+
+## 3. 模块与主要文件
+
+| 文件/目录 | 职责 |
+|---|---|
+| `core/.../Models.kt` | 来源、观察、片段、证据、断言、指标、日视图与策略契约 |
+| `core/.../Intervals.kt` | 半开区间、并集/扣除、排除过滤、计步基线、距离与投影 |
+| `core/.../DayEngine.kt` | 应用会话、停留/移动、媒体、生活片段、摘要与规律 |
+| `core/.../NoticeRules.kt` | 通知敏感信息脱敏及文本分词 |
+| `core/.../ArchiveRules.kt` | 归档文件名和头部限制 |
+| `app/.../WoApplication.kt` | IO 初始化、Graph、SQLCipher 打开、有限队列批处理 |
+| `app/.../collector/PullCollectors.kt` | UsageEvents、MediaStore、Calendar、Health Connect 补采 |
+| `app/.../collector/PassiveListeners.kt` | 通知、MediaSession 与窗口元数据回调 |
+| `app/.../collector/RecordingService.kt` | 框架定位、计步、静默前台服务、GNSS 与降级预算 |
+| `app/.../collector/Capabilities.kt` | 来源权限、Provider 与功能可用性检查 |
+| `app/.../collector/WorkScheduling.kt` | 唯一任务、维护、启动/时钟/时区恢复与暂停入口 |
+| `app/.../data/WoRepository.kt` | 事务写入、策略/游标、缓存重建、搜索、修正、删除与清理 |
+| `app/.../data/KeyVault.kt` | Keystore 包装、数据库秘密、HMAC 来源键、保护配置 |
+| `app/.../data/BackupService.kt` | 流式归档、预检、暂存恢复、每日文本导出 |
+| `app/.../data/EnhancedSummary.kt` | 可选 HTTPS 事实排序协议与额度 |
+| `app/.../MainActivity.kt` | 权限/设置入口、身份验证、文件选择与生命周期 |
+| `app/.../ui/` | ViewModel、Compose 页面、时间轴、回放、足迹与缩略图 |
+| `app/src/main/assets/default_config.json` | 默认算法与预算参数 |
+| `app/schemas/` / `contracts/schema.sql` | 实际 Room V1 导出结构与生成的可读 DDL |
+
+表中的 Kotlin 路径省略了 `src/main/kotlin/com/personal/wo/` 前缀；core 领域文件位于该前缀下的 `core/` 包。
+
+## 4. 数据流与修改约束
+
+采集器把公开接口结果规范化为 Observation，生成稳定 sourceKey，连同当前 generation 进入仓库。回调通道容量 512，最多合并 100 条；拉取来源的观察、游标、覆盖和 dirty_window 在同一事务更新，避免只推进游标而没有落数据。
+
+DayEngine 在归档时区内按半开时间区间生成 DayView；数据发生变化时更新 revision，缓存可先显示，重建在后台进行。UI 与网络增强应用结果之前检查日期/revision 或处理代次，避免把旧结果覆盖新视图。
+
+修改领域逻辑时保留以下约束：
+
+1. 原生同一来源记录重复读取保持幂等，不能凭到达次数累计时长或步数。
+2. 多应用重叠按区间并集计算手机活动；缺失终止边界保留未知。
+3. 暂停/停止/删除先持久化 generation 和排除，旧批次及历史补采仍受过滤。
+4. 计划、通知线索与系统记录不混淆；未知不是数值 0；本人确认保留断言来源。
+5. 设备与时钟边界切断计步/会话连续性；不把旧媒体会话延伸到进程恢复。
+6. 归档恢复失败不得部分替换正式数据；密钥故障不得自动清库。
+7. 发布包的离线网络权限和原生对齐需独立检查，不能仅凭源码推断。
+
+## 5. 数据库表
+
+以 `app/schemas/com.personal.wo.data.WoDatabase/1.json` 为权威结构。
+
+| 表 | 用途 |
+|---|---|
+| app_meta | 版本、额度等小型元数据 |
+| recording_policy | 单例记录策略与处理代次 |
+| source_state | 来源能力、状态与游标 |
+| observation | 原始观察；sourceId + sourceKey 唯一 |
+| exclusion | 暂停、停止、应用/时段与删除排除 |
+| place | 本人命名的地点 |
+| episode | 片段、revision、标题及时间边界 |
+| episode_evidence | 最小来源证据；随片段删除级联 |
+| episode_relation | 片段间关系 |
+| annotation | 本人修正、确认与收藏 |
+| media_ref | 本机媒体 URI 索引 |
+| daily_metric | 日期/时区/指标聚合 |
+| daily_summary | 日视图缓存 |
+| source_coverage | 来源覆盖与缺口 |
+| event_search | FTS4 检索索引 |
+| operation_log | 有界诊断日志 |
+| dirty_window | 等待重建的数据时间窗口 |
+
+当前没有需要兼容的旧发布 schema。后续修改数据库必须提升版本、添加明确 Migration 并导出新 schema；不得使用破坏性迁移兜底。可运行 `python3 scripts/verify_schema.py` 检查现有结构，该脚本同时更新可读 DDL。
+
+## 6. 构建与测试
+
+在仓库根目录执行；Windows 使用 `gradlew.bat`。源码不含签名私钥，Debug 使用标准调试签名。
+
+```bash
+./gradlew :core:test
+./gradlew :app:lintPersonalOfflineDebug :app:lintPersonalEnhancedDebug
+./gradlew :app:assemblePersonalOfflineDebug :app:assemblePersonalEnhancedDebug
+./gradlew :app:assemblePersonalOfflineDebugAndroidTest
+python3 scripts/verify_schema.py
+```
+
+连接 Android 10+ 的测试手机或已正常启动的兼容模拟器后，执行设备测试：
+
+```bash
+./gradlew :app:connectedPersonalOfflineDebugAndroidTest
+```
+
+Debug 支持 arm64-v8a 和 x86_64。标准 APK 输出在 `app/build/outputs/apk/<flavor>/<buildType>/`；本地单元测试报告在 `core/build/test-results/test/`；Lint 报告在 `app/build/reports/`。
+
+当前核心测试 33 项、流式加密测试 2 项，原构建共 35 项通过。AndroidTest 3 项覆盖实际 SQLCipher 文件加密、重复/暂停/删除持久性、归档认证失败与恢复往返；只完成编译，尚未执行。已保存的 `docs/reports/` 是原构建记录，本次文档整理没有重新执行 Gradle 构建。
+
+## 7. Release 与升级签名
+
+Release 只包含 arm64-v8a，启用 R8 和资源压缩。使用个人签名备份，在本机安全提供以下环境变量：
+
+| 环境变量 | 含义 |
+|---|---|
+| WO_KEYSTORE_PATH | 私有 keystore 的本机路径 |
+| WO_KEYSTORE_PASSWORD | keystore 密码 |
+| WO_KEY_ALIAS | 签名别名，未指定时默认 wo |
+| WO_KEY_PASSWORD | 私钥密码 |
+
+```bash
+./gradlew :app:assemblePersonalOfflineRelease :app:assemblePersonalEnhancedRelease
+```
+
+未提供签名配置时，构建可能生成未签名产物；不能将其当作可覆盖安装的个人 Release。升级必须复用原签名并提升 versionCode。离线/增强共用包名，切换时可覆盖；Debug 与已有个人签名 Release 冲突时，请使用独立测试设备或先明确备份再选择测试方式。
+
+静态检查脚本需要 APK 路径和 Android SDK 路径：
+
+```bash
+python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.0.0_Offline.apk /absolute/path/android-sdk
+```
+
+脚本检查签名、min/targetSdk、离线 INTERNET 移除、APK zipalign 以及原生 ELF 16 KiB 对齐。它不能替代 16 KiB Android 设备上的运行验证。离线 APK 文件名应含 `Offline` 或 `personalOffline`，因为脚本据此选择网络权限断言。
+
+## 8. 增强端点开发协议
+
+此协议是应用自定义的事实排序协议。端点用 HTTPS，访问密钥（若提供）通过 `Authorization: Bearer ...` 发送，在手机 Keystore 保护的配置中保存。
+
+请求示例：
+
+```json
+{
+  "task": "arrangeFacts",
+  "model": "optional-model",
+  "facts": [
+    {"id": "steps", "type": "STEPS", "value": "4280步"}
+  ],
+  "outputContract": "Return only a JSON object with factIds, a unique ordered list drawn from the provided IDs. Do not generate text or new facts."
+}
+```
+
+有效响应：
+
+```json
+{"factIds":["steps"]}
+```
+
+服务端只返回已给定事实 ID 的次序，不返回文案、数字或新增事实。应用限制请求体 12 KiB、响应体 16 KiB、连接超时 10 秒、读取超时 20 秒；最多 4 个唯一且已知的事实 ID。未知字段按严格序列化契约拒绝；失败后保留本地摘要。
+
+当前实际归档日最多请求 3 次，额度在发出网络请求之前事务记录，失败请求也占用额度。没有自动后台模型任务，也没有在仓库内提供对应服务端。
+
+## 9. 备份开发注意事项
+
+内部固定七项是 `manifest.json`、`observations.jsonl`、`episodes.jsonl`、`annotations.jsonl`、`places.json`、`policy.json`、`daily.jsonl`。实际规范由 ArchiveRules 与 BackupService 共同约束。
+
+独立恢复码不写入归档。整个外层头绑定为关联数据，先完全认证加密流，再解析 ZIP 和业务记录。恢复在加密暂存数据库检查后，以正式数据库单事务替换；失败回滚，成功后保持停止并重置来源授权状态。恢复来源键种子，但不继承旧设备标识和媒体访问权限。
+
+当前每类 JSONL 50,000 条、展开 512 MiB 的限额是首版边界。扩展备份时需同时完善导出入口、计数/限额、认证失败处理和大规模性能验证，不能只去掉限制。
+
+## 10. 继续开发与真机验收
+
+| 优先事项 | 完成标准 |
+|---|---|
+| 实际安装与来源授权 | 目标 Android/OEM 上逐项授权、撤销、再次授予；来源状态与缺口符合实际 |
+| 数据库与恢复设备测试 | 运行现有 3 项 AndroidTest；错误恢复码/截断后旧数据仍完整 |
+| 后台与日耗电 | 记录 24 小时对照、熄屏/重启/省电/温度/进程中断及 7 日稳定性结果 |
+| 显示兼容 | 小屏、大字体 200%、深色模式、辅助功能与 16 KiB 系统运行 |
+| 初始化救援恢复 | 密钥/数据库初始化失败时仍能进入独立恢复流程并保留原文件 |
+| 健康与媒体对账 | Health Connect 变更令牌、更早撤回、媒体删除和跨设备重新关联 |
+| 大规模备份/迁移 | 范围完整备份入口、真实规模内存与时间、明确 schema Migration |
+
+评估结果按 [原设计第 17–19 节](Design_Baseline.md)记录设备、系统、授权、电量条件与结论；不得把未执行的测试填成通过。
+
+## 11. 仓库与资料更新
+
+`docs/Source_SHA256.json` 记录除自身外的仓库交付文件 SHA-256，用于比对来源。更新文件后重新生成清单，保留原始设计和历史验证时间；新增验证应明确实际执行日期和环境。
+
+仓库不包含安装包、原始生活数据、恢复码、签名私钥、API 密钥或本机 SDK 配置。个人签名备份需由本人另行保管。源码上传不改变 APK 版本和签名。

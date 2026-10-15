@@ -1,0 +1,21 @@
+.gradle/
+.kotlin/
+build/
+**/build/
+local.properties
+*.jks
+*.keystore
+keystore.properties
+.idea/
+*.iml
+# Local credentials and personal exports
+.env
+.env.*
+signing.json
+.release-signing/
+*.p12
+*.pfx
+*.pem
+*.apk
+*.aab
+*.woarchive

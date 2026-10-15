@@ -1,0 +1,57 @@
+package com.personal.wo.collector
+
+import android.Manifest
+import android.app.AppOpsManager
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorManager
+import android.location.LocationManager
+import android.os.Build
+import android.os.Process
+import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.*
+import com.personal.wo.core.*
+
+object Capabilities {
+    fun granted(c:Context,p:String)=ContextCompat.checkSelfPermission(c,p)==PackageManager.PERMISSION_GRANTED
+    fun usage(c:Context):Boolean=c.getSystemService(AppOpsManager::class.java).unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,Process.myUid(),c.packageName)==AppOpsManager.MODE_ALLOWED
+    fun notices(c:Context)=c.packageName in NotificationManagerCompat.getEnabledListenerPackages(c)
+    fun window(c:Context):Boolean=Settings.Secure.getString(c.contentResolver,Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)?.split(":")?.any { ComponentName.unflattenFromString(it)==ComponentName(c,WindowListener::class.java) } ?: false
+    fun location(c:Context)=granted(c,Manifest.permission.ACCESS_COARSE_LOCATION) || granted(c,Manifest.permission.ACCESS_FINE_LOCATION)
+    fun steps(c:Context)=granted(c,Manifest.permission.ACTIVITY_RECOGNITION) && c.getSystemService(SensorManager::class.java).getDefaultSensor(Sensor.TYPE_STEP_COUNTER)!=null
+    fun healthPermissions():Set<String> = setOf(HealthPermission.getReadPermission(StepsRecord::class),HealthPermission.getReadPermission(SleepSessionRecord::class),HealthPermission.getReadPermission(ExerciseSessionRecord::class))
+    suspend fun probe(c:Context,p:Policy):List<SourceState> {
+        val sm=c.getSystemService(SensorManager::class.java); val lm=c.getSystemService(LocationManager::class.java)
+        fun s(source:Source,grant:Boolean,support:Boolean=true,detail:String="",partial:Boolean=false)=SourceState(source,support,if(grant) if(partial) "PARTIAL" else "GRANTED" else "DENIED",if(!p.requested) "STOPPED" else if(p.paused) "PAUSED" else if(grant&&support) "RUNNING" else "STOPPED",detail=detail)
+        val photo=if(Build.VERSION.SDK_INT>=33) granted(c,Manifest.permission.READ_MEDIA_IMAGES)||granted(c,Manifest.permission.READ_MEDIA_VIDEO) else granted(c,Manifest.permission.READ_EXTERNAL_STORAGE)
+        val partial=Build.VERSION.SDK_INT>=34 && granted(c,Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) && !photo
+        val hc=runCatching { HealthConnectClient.getSdkStatus(c)==HealthConnectClient.SDK_AVAILABLE }.getOrDefault(false)
+        val hp=if(hc) runCatching { HealthConnectClient.getOrCreate(c).permissionController.getGrantedPermissions() }.getOrDefault(emptySet()) else emptySet()
+        return listOf(
+            s(Source.USAGE,usage(c),detail="公开UsageEvents；统计活动区间并去除重叠"),
+            s(Source.LOCATION,location(c),lm.allProviders.any { it!=LocationManager.PASSIVE_PROVIDER },if(!lm.isLocationEnabled) "系统定位开关关闭" else "框架定位；无需Google服务"),
+            s(Source.STEPS,granted(c,Manifest.permission.ACTIVITY_RECOGNITION),sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)!=null,"硬件计步；不使用全天加速度计采样"),
+            s(Source.NOTIFICATION,notices(c),detail="只记录授权后的通知片段；正文解析需要单独选择应用"),
+            s(Source.MEDIA,notices(c),detail="通过媒体会话被动观察；不控制播放"),
+            s(Source.PHOTO,photo||partial,detail=if(partial) "仅访问本人选定的媒体" else "索引元数据，不复制图库",partial=partial),
+            s(Source.CALENDAR,granted(c,Manifest.permission.READ_CALENDAR),detail="日历只作为计划，不认定实际出席"),
+            s(Source.HEALTH,hp.any { it in healthPermissions() },hc,if(!hc) "Health Connect未提供；其他功能可以继续" else "步数聚合、运动与睡眠来源"),
+            s(Source.ACCESSIBILITY,window(c),detail="可选窗口包名；不读取屏幕正文、不执行手势")
+        ).map { if(it.source !in p.enabledSources) it.copy(runtime="STOPPED",detail="本人已关闭此来源") else it }
+    }
+    fun sourceName(s:Source)=when(s) { Source.USAGE->"应用活动";Source.LOCATION->"位置与足迹";Source.STEPS->"硬件步数";Source.NOTIFICATION->"通知线索";Source.MEDIA->"媒体播放";Source.PHOTO->"照片与视频";Source.CALENDAR->"日历计划";Source.HEALTH->"活动与健康";Source.ACCESSIBILITY->"窗口切换增强" }
+    fun special(c:Context,source:Source):Intent=when(source) {
+        Source.USAGE -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+        Source.NOTIFICATION,Source.MEDIA -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+        Source.ACCESSIBILITY -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        Source.HEALTH -> Intent("android.health.connect.action.HEALTH_HOME_SETTINGS")
+        else -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:${c.packageName}"))
+    }
+}

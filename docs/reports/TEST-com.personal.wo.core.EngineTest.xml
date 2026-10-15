@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.core.EngineTest" tests="33" skipped="0" failures="0" errors="0" timestamp="2026-10-14T19:12:27.652Z" hostname="4d93ee73a0a1" time="0.188">
+  <properties/>
+  <testcase name="screenOnDoesNotBypassKnownKeyguard" classname="com.personal.wo.core.EngineTest" time="0.096"/>
+  <testcase name="correctedFactsRetainUserConfirmation" classname="com.personal.wo.core.EngineTest" time="0.004"/>
+  <testcase name="malformedArchivePathsAreRejected" classname="com.personal.wo.core.EngineTest" time="0.002"/>
+  <testcase name="overlapDoesNotInflate" classname="com.personal.wo.core.EngineTest" time="0.005"/>
+  <testcase name="lockEndsActivity" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <testcase name="intervalsAreHalfOpen" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <testcase name="unknownMetricIsNull" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <testcase name="crossPauseHealthCountIsNotProRated" classname="com.personal.wo.core.EngineTest" time="0.002"/>
+  <testcase name="mediaRecoveryCannotExtendAnOldSong" classname="com.personal.wo.core.EngineTest" time="0.004"/>
+  <testcase name="chineseEnglishTokens" classname="com.personal.wo.core.EngineTest" time="0.031"/>
+  <testcase name="ordinaryPasswordsAreNotPersisted" classname="com.personal.wo.core.EngineTest" time="0.0"/>
+  <testcase name="stepCounterResetCreatesNewBaseline" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <testcase name="notificationLanguageIsConservative" classname="com.personal.wo.core.EngineTest" time="0.0"/>
+  <testcase name="offlineRouteUnwrapsDateLine" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <testcase name="healthAggregationDoesNotDoubleHardwareSteps" classname="com.personal.wo.core.EngineTest" time="0.003"/>
+  <testcase name="daylightSavingWindowHasActualLength" classname="com.personal.wo.core.EngineTest" time="0.003"/>
+  <testcase name="pauseAndStoppedNotDoubleCounted" classname="com.personal.wo.core.EngineTest" time="0.003"/>
+  <testcase name="packageActivitySwitchIsMerged" classname="com.personal.wo.core.EngineTest" time="0.002"/>
+  <testcase name="staleGenerationInputsCanBeExcluded" classname="com.personal.wo.core.EngineTest" time="0.0"/>
+  <testcase name="unknownTailDoesNotCountAllDay" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <testcase name="videoCannotBeLabeledAsPhoto" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <testcase name="retainedEvidenceStillHonorsDeletionExclusion" classname="com.personal.wo.core.EngineTest" time="0.0"/>
+  <testcase name="locationGapDoesNotMakeStay" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <testcase name="otpIsRemovedBeforePersistence" classname="com.personal.wo.core.EngineTest" time="0.002"/>
+  <testcase name="calendarCannotBecomeFact" classname="com.personal.wo.core.EngineTest" time="0.002"/>
+  <testcase name="oversizedOrUnknownArchiveHeadersAreRejected" classname="com.personal.wo.core.EngineTest" time="0.0"/>
+  <testcase name="driftRemainsOneStay" classname="com.personal.wo.core.EngineTest" time="0.005"/>
+  <testcase name="duplicatesAreIdempotent" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <testcase name="crossMidnightKeepsStableId" classname="com.personal.wo.core.EngineTest" time="0.002"/>
+  <testcase name="screenWithoutKeyguardCanResume" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <testcase name="noScreenInteractionCannotBecomeSleep" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <testcase name="pauseBarrierStopsContinuity" classname="com.personal.wo.core.EngineTest" time="0.006"/>
+  <testcase name="mediaPauseIsNotPlayback" classname="com.personal.wo.core.EngineTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,27 @@
+-- Generated from Room V1; the Room schema is authoritative.
+PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS `app_meta` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`));
+CREATE TABLE IF NOT EXISTS `recording_policy` (`singletonId` INTEGER NOT NULL, `json` TEXT NOT NULL, PRIMARY KEY(`singletonId`));
+CREATE TABLE IF NOT EXISTS `source_state` (`sourceId` TEXT NOT NULL, `json` TEXT NOT NULL, PRIMARY KEY(`sourceId`));
+CREATE TABLE IF NOT EXISTS `observation` (`id` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `sourceKey` TEXT NOT NULL, `kind` TEXT NOT NULL, `startMs` INTEGER NOT NULL, `endMs` INTEGER NOT NULL, `receivedMs` INTEGER NOT NULL, `json` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE UNIQUE INDEX IF NOT EXISTS `index_observation_sourceId_sourceKey` ON `observation` (`sourceId`, `sourceKey`);
+CREATE INDEX IF NOT EXISTS `index_observation_startMs_endMs` ON `observation` (`startMs`, `endMs`);
+CREATE TABLE IF NOT EXISTS `exclusion` (`id` TEXT NOT NULL, `startMs` INTEGER NOT NULL, `endMs` INTEGER, `json` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE INDEX IF NOT EXISTS `index_exclusion_startMs_endMs` ON `exclusion` (`startMs`, `endMs`);
+CREATE TABLE IF NOT EXISTS `place` (`id` TEXT NOT NULL, `json` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE TABLE IF NOT EXISTS `episode` (`id` TEXT NOT NULL, `revision` INTEGER NOT NULL, `startMs` INTEGER NOT NULL, `endMs` INTEGER NOT NULL, `kind` TEXT NOT NULL, `title` TEXT NOT NULL, `searchText` TEXT NOT NULL, `json` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE INDEX IF NOT EXISTS `index_episode_startMs_endMs` ON `episode` (`startMs`, `endMs`);
+CREATE INDEX IF NOT EXISTS `index_episode_kind` ON `episode` (`kind`);
+CREATE TABLE IF NOT EXISTS `episode_evidence` (`episodeId` TEXT NOT NULL, `evidenceKey` TEXT NOT NULL, `snapshotJson` TEXT NOT NULL, PRIMARY KEY(`episodeId`, `evidenceKey`), FOREIGN KEY(`episodeId`) REFERENCES `episode`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE );
+CREATE INDEX IF NOT EXISTS `index_episode_evidence_episodeId` ON `episode_evidence` (`episodeId`);
+CREATE TABLE IF NOT EXISTS `episode_relation` (`parentId` TEXT NOT NULL, `childId` TEXT NOT NULL, `relation` TEXT NOT NULL, PRIMARY KEY(`parentId`, `childId`, `relation`));
+CREATE TABLE IF NOT EXISTS `annotation` (`id` TEXT NOT NULL, `episodeId` TEXT NOT NULL, `createdMs` INTEGER NOT NULL, `json` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE INDEX IF NOT EXISTS `index_annotation_episodeId` ON `annotation` (`episodeId`);
+CREATE TABLE IF NOT EXISTS `media_ref` (`id` TEXT NOT NULL, `sourceKey` TEXT NOT NULL, `uri` TEXT NOT NULL, `startMs` INTEGER NOT NULL, PRIMARY KEY(`id`));
+CREATE TABLE IF NOT EXISTS `daily_metric` (`date` TEXT NOT NULL, `zone` TEXT NOT NULL, `metricKey` TEXT NOT NULL, `json` TEXT NOT NULL, PRIMARY KEY(`date`, `zone`, `metricKey`));
+CREATE TABLE IF NOT EXISTS `daily_summary` (`date` TEXT NOT NULL, `zone` TEXT NOT NULL, `revision` INTEGER NOT NULL, `asOfMs` INTEGER NOT NULL, `json` TEXT NOT NULL, PRIMARY KEY(`date`, `zone`));
+CREATE TABLE IF NOT EXISTS `source_coverage` (`id` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `startMs` INTEGER NOT NULL, `endMs` INTEGER NOT NULL, `json` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE INDEX IF NOT EXISTS `index_source_coverage_startMs_endMs` ON `source_coverage` (`startMs`, `endMs`);
+CREATE VIRTUAL TABLE IF NOT EXISTS `event_search` USING FTS4(`episodeId` TEXT NOT NULL, `tokens` TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS `operation_log` (`id` TEXT NOT NULL, `timeMs` INTEGER NOT NULL, `code` TEXT NOT NULL, `count` INTEGER NOT NULL, PRIMARY KEY(`id`));
+CREATE TABLE IF NOT EXISTS `dirty_window` (`id` TEXT NOT NULL, `startMs` INTEGER NOT NULL, `endMs` INTEGER NOT NULL, `generation` INTEGER NOT NULL, `reason` TEXT NOT NULL, PRIMARY KEY(`id`));

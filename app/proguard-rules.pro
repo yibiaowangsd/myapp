@@ -1,0 +1,4 @@
+-keep class net.zetetic.database.sqlcipher.** { *; }
+-keepclasseswithmembers class * { native <methods>; }
+-keepattributes Signature,InnerClasses,EnclosingMethod
+-dontwarn javax.annotation.**
