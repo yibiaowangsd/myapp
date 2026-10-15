@@ -14,6 +14,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.*
 import com.personal.wo.core.*
 import com.personal.wo.ui.*
+import com.personal.wo.collector.ConnectedApp
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -145,4 +146,64 @@ class UiFlowTest {
         compose.onNodeWithText("数据与隐私").performClick()
         assertTrue(permissions && privacy)
     }
+    @Test fun homeOpensTimelineWithSummaryOneTapAway() {
+        var summary=false
+        compose.setContent { WoTheme(dark=false) {
+            Scaffold(bottomBar={AppNavigation(0){}}) { padding ->
+                Box(Modifier.fillMaxSize().padding(padding).padding(horizontal=16.dp)) {
+                    TodayTimeline(state(),{},{},{summary=true},{},{},{})
+                }
+            }
+        } }
+        compose.onNodeWithTag("timeline-home").assertIsDisplayed()
+        compose.onNodeWithText("今日回顾").assertDoesNotExist()
+        compose.onNodeWithText("一天总结").assertIsDisplayed().performClick()
+        assertTrue(summary)
+        capture("12-timeline-home")
+    }
+    @Test fun connectionSelectionUsesInstalledAppsAndRequestsSystemAccessDirectly() {
+        var selected="";var permission:Source?=null
+        val s=state().copy(demo=false,appsLoaded=true,apps=listOf(ConnectedApp("com.tencent.qqmusic","QQ 音乐","音乐与播客"),ConnectedApp("com.MobileTicket","铁路 12306","出行与地图")))
+        compose.setContent { WoTheme(dark=false) { Surface(color=MaterialTheme.colorScheme.background) {
+            ConnectionsPage(s,{permission=it},{_,_->},{_,_->},{pkg,on->if(on)selected=pkg},{},{},{},{})
+        } } }
+        capture("13-connections")
+        compose.onNodeWithText("搜索应用或类别").performTextInput("铁路")
+        compose.onNodeWithText("QQ 音乐").assertDoesNotExist()
+        compose.onNodeWithText("铁路 12306").performClick()
+        compose.onNodeWithTag("notice-com.MobileTicket").performClick()
+        assertEquals("com.MobileTicket",selected);assertEquals(Source.NOTIFICATION,permission)
+        capture("14-app-connection")
+    }
+    @Test fun sourcePageDisclosesHuaweiAccountNotConnectedAndShowsBackgroundHelp() {
+        val s=state().copy(demo=false,appsLoaded=true,sources=listOf(SourceState(Source.HEALTH,supported=false)))
+        compose.setContent { WoTheme(dark=false) { ConnectionsPage(s,{},{_,_->},{_,_->},{_,_->},{},{},{},{}) } }
+        compose.onNodeWithText("来源与后台").performClick()
+        compose.onNodeWithTag("connections-list").performScrollToNode(hasText("账号数据尚未接入"))
+        compose.onNodeWithText("账号数据尚未接入").assertIsDisplayed()
+        capture("15-huawei-status")
+        compose.onNodeWithTag("connections-list").performScrollToNode(hasText("需要一直开着吗？"))
+        compose.onNodeWithTag("connections-list").performScrollToIndex(3)
+        compose.onNodeWithText("电池优化").assertIsDisplayed()
+        capture("16-background-help")
+    }
+    @Test @Config(qualifiers="zh-rCN-w360dp-h800dp-xhdpi")
+    fun connectionControlsRemainAccessibleWithLargeTextAndDarkTheme() {
+        var excluded=false
+        val s=state().copy(demo=false,appsLoaded=true,apps=listOf(ConnectedApp("com.tencent.qqmusic","QQ 音乐","音乐与播客")))
+        compose.setContent {
+            val density=LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density,1.5f)) {
+                WoTheme(dark=true) { Surface(color=MaterialTheme.colorScheme.background) {
+                    ConnectionsPage(s,{},{_,_->},{_,on->excluded=!on},{_,_->},{},{},{},{})
+                } }
+            }
+        }
+        compose.onNodeWithText("QQ 音乐").performClick()
+        compose.onNodeWithTag("connections-list").performScrollToNode(hasTestTag("include-com.tencent.qqmusic"))
+        compose.onNodeWithTag("include-com.tencent.qqmusic").performClick()
+        assertTrue(excluded)
+        capture("17-connections-large-dark")
+    }
+
 }

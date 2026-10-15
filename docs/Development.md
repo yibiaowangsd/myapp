@@ -2,9 +2,9 @@
 
 文档更新：2026-10-15（Asia/Shanghai）
 
-对应应用版本：1.2.0；数据库版本：Room V1；包名：`com.personal.wo`。
+对应应用版本：1.3.0；数据库版本：Room V1；包名：`com.personal.wo`。
 
-本仓库包含 1.0.0 基础功能、1.0.1 启动异常处理、1.0.2 数据库打开回调修复、1.1.0界面重构与1.2.0直接授权/计步兼容/每日总结。最新构建结果见 Verification.md，原 1.0.0 验证记录保存在 archive/v1.0.0/。修复范围和实际设备验证边界见 [HarmonyOS 启动修复说明](HarmonyOS_4.2.0_Startup_Fix.md)。
+本仓库包含 1.0.0 基础功能、1.0.1 启动异常处理、1.0.2 数据库打开回调修复、1.1.0界面重构、1.2.0直接授权/计步兼容/每日总结，以及1.3.0时间线首页/应用连接/采集提效。最新构建结果见 Verification.md，原 1.0.0 验证记录保存在 archive/v1.0.0/。修复范围和实际设备验证边界见 [HarmonyOS 启动修复说明](HarmonyOS_4.2.0_Startup_Fix.md)。
 
 ## 1. 阅读入口
 
@@ -125,7 +125,7 @@ python3 scripts/verify_pragmas.py
 
 Debug 支持 arm64-v8a 和 x86_64。标准 APK 输出在 `app/build/outputs/apk/<flavor>/<buildType>/`；本地单元测试报告在 `core/build/test-results/test/`；Lint 报告在 `app/build/reports/`。
 
-当前包含事件引擎、流式加密、应用时长口径、每日回顾、硬件计步事件、系统权限计划、传感器注册回退、启动恢复、数据库回调和原生UI流程测试。最终测试数量与通过状态见Verification.md。UI测试覆盖点击即请求、统一申请入口、照片不可访问、计步重连、小屏大字体、深色、时间线和日期选择。AndroidTest 4项只编译，尚未在设备执行；本次报告保存在docs/reports/v1.2.0/。
+当前包含事件引擎、流式加密、应用时长口径、每日回顾、硬件计步事件、系统权限计划、传感器注册回退、启动恢复、数据库回调和原生UI流程测试。最终测试数量与通过状态见Verification.md。UI测试覆盖点击即请求、统一申请入口、照片不可访问、计步重连、小屏大字体、深色、时间线和日期选择。AndroidTest 4项只编译，尚未在设备执行；本次报告保存在docs/reports/v1.3.0/。
 
 ## 7. Release 与升级签名
 
@@ -147,7 +147,7 @@ Release 只包含 arm64-v8a，启用 R8 和资源压缩。使用个人签名备�
 静态检查脚本需要 APK 路径和 Android SDK 路径：
 
 ```bash
-python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.2.0_Offline.apk /absolute/path/android-sdk
+python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.3.0_Offline.apk /absolute/path/android-sdk
 ```
 
 脚本检查签名、min/targetSdk、离线 INTERNET 移除、APK zipalign 以及原生 ELF 16 KiB 对齐。它不能替代 16 KiB Android 设备上的运行验证。离线 APK 文件名应含 `Offline` 或 `personalOffline`，因为脚本据此选择网络权限断言。
@@ -205,7 +205,7 @@ python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.2.0_Offline.apk /abs
 
 `docs/Source_SHA256.json` 记录除自身外的仓库交付文件 SHA-256，用于比对来源。更新文件后重新生成清单，保留原始设计和历史验证时间；新增验证应明确实际执行日期和环境。
 
-仓库不包含安装包、原始生活数据、恢复码、签名私钥、API 密钥或本机 SDK 配置。个人签名备份需由本人另行保管。1.2.0 提升 versionCode 到 5，复用原 Release 签名与数据库结构，可覆盖升级。
+仓库不包含安装包、原始生活数据、恢复码、签名私钥、API 密钥或本机 SDK 配置。个人签名备份需由本人另行保管。1.3.0 提升 versionCode 到 6，复用原 Release 签名与数据库结构，可覆盖升级。
 
 ## 12. 启动兼容约束
 
@@ -233,3 +233,21 @@ DatabaseOpenCallbackTest 使用严格的数据库接口替身测试生产回调�
 - `UiFlowTest`：Robolectric API35原生图形模式渲染生产Compose组件，输出到`app/build/ui-previews/`。不是系统授权弹窗或华为实机传感器验证。
 
 运行`./gradlew :app:testPersonalOfflineDebugUnitTest :core:test`；首次需要下载Robolectric的Android运行时。测试依赖不进入Release包。系统权限与硬件兼容性必须在HBN-AL80上确认；本工程未配置华为Health Kit平台凭据，也不声称已同步华为运动健康历史数据。
+
+
+## 1.3.0 时间线、连接与效率
+
+- `ui/AppUi.kt`：底部四页；默认 `TodayTimeline`，汇总独立为 summary 路由。`TimelinePage` 延续日期/类别/位置分布，片段显示真实开始和结束时间。
+- `collector/AppConnections.kt`：从可见 launcher 和已有记录包名发现安装应用，后台读取名称，不申请 QUERY_ALL_PACKAGES。常用应用分组仅帮助浏览，不代表厂商账号/API接入。`connectionStatus` 同时检查策略、排除、来源启用和系统授权。
+- `ui/ConnectionsUi.kt`：应用搜索、展开配置、直接通知授权；来源与后台分页内显示 Health Connect 和华为运动健康的不同状态。通知正文选择采用当前策略增量修改，避免快速点击覆盖其他应用选择。
+- `collector/PullGate.kt`：Mutex 串行化补采，使用 elapsedRealtime 进行30秒成功冷却；手动刷新/授权完成可以强制拉取。失败/取消不更新时间；前台请求不会被可能跳过健康读取的后台请求冷却。每个来源原有超时、游标和隔离逻辑保留。
+- `data/WoRepository.kt`：probe 合并为一次事务和一次通知，旧游标、成功时间和新鲜度在同一个锁内保留；不变状态不重复写入。数据库版本和表结构保持 V1。
+- `ui/WoViewModel.kt`：reload 串行避免多个日重建同时执行；进入历史相关页面才读取90天摘要和计算规律；日期切换不重复拉取系统数据。位置展示只查询 LOCATION 行。
+- `collector/RecordingPlan.kt` / `RecordingService.kt`：根据当前记录策略、来源和真实权限决定传感器运行计划。日历、通知等无关变更保持计步基线；位置权限/精度、传感器启用变化或显式重连才重建服务。启动失败写入诊断。无步数/位置时停掉前台记录服务；step-only 不注册显著运动触发器。
+
+`CollectionEfficiencyTest` 验证并发补采、冷却/强制刷新、异常取消重试、后台服务必要性、权限变化及应用连接状态；原生UI测试覆盖默认时间线、应用搜索/选择/系统请求回调、华为未连接、后台说明及窄屏大字体深色。
+
+这是减少重复工作次数的代码改动，没有实机CPU/耗电/启动时长对比，不能声明提升百分比。Huawei Health Kit 仍缺应用开通和数据审核配置，未加入不可工作的SDK或虚构AppID；完整实施清单见[华为接入准备](Huawei_Health_Integration.md)。
+
+
+构建环境提示：本轮增量构建遇到一次Lint的Kotlin分析器引用另一个变体KAPT临时stub、而该文件正在重新生成的FileNotFoundException。将最终测试/Lint/Release命令加上 `--max-workers=1 --no-parallel` 串行执行，保留所有检查，不关闭Lint。该问题属于构建工具并发，不是设备运行诊断。

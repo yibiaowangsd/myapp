@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.core.StreamingCryptoTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-15T07:28:55.455Z" hostname="4d93ee73a0a1" time="0.364">
+  <properties/>
+  <testcase name="fullLargeStreamRoundTripAndAuthentication" classname="com.personal.wo.core.StreamingCryptoTest" time="0.34"/>
+  <testcase name="independentRecoveryKeyWrapsKeyset" classname="com.personal.wo.core.StreamingCryptoTest" time="0.024"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

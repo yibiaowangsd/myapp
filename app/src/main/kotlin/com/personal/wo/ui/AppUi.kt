@@ -27,6 +27,7 @@ import java.time.format.DateTimeFormatter
     val context=LocalContext.current
     val s by vm.state.collectAsState();var tab by rememberSaveable { mutableIntStateOf(0) };var page by rememberSaveable { mutableStateOf("") };var parent by rememberSaveable { mutableStateOf("") }
     val snackbar=remember { SnackbarHostState() };val holder=rememberSaveableStateHolder();LaunchedEffect(s.message) { s.message?.let { snackbar.showSnackbar(it);vm.message(null) } }
+    LaunchedEffect(tab,page) { vm.section(tab==1||tab==3||page=="insights",tab==2&&page.isBlank()) }
     fun setup() { if(s.demo)vm.demo(false);page="setup" }
     fun open(e:Episode) { parent=page;page="episode";vm.episode(e.id) }
     fun back() {
@@ -40,7 +41,7 @@ import java.time.format.DateTimeFormatter
             Column(Modifier.widthIn(max=680.dp).fillMaxSize().padding(horizontal=16.dp)) {
                 Row(Modifier.fillMaxWidth().heightIn(min=56.dp),verticalAlignment=Alignment.CenterVertically) {
                     if(page.isNotBlank())IconButton(onClick={back()}){Icon(Icons.Outlined.ArrowBack,"返回")}
-                    Text(if(page.isBlank())listOf("今天","回忆","我的")[tab] else when(page){"settings"->"更多设置";"setup"->"记录权限";"search"->"搜索回忆";"episode"->"生活片段";"insights"->"生活趋势";else->"一天的时间线"},Modifier.weight(1f),style=MaterialTheme.typography.titleLarge)
+                    Text(if(page.isBlank())listOf("时间线","回忆","连接","我的")[tab] else when(page){"summary"->"一天总结";"settings"->"更多设置";"setup"->"记录权限";"search"->"搜索回忆";"episode"->"生活片段";"insights"->"生活趋势";else->"一天的时间线"},Modifier.weight(1f),style=MaterialTheme.typography.titleLarge)
                     if(page.isBlank()){IconButton(onClick={page="search"}){Icon(Icons.Outlined.Search,"搜索记录")};IconButton(onClick={setup()}){Icon(Icons.Outlined.Settings,"记录权限")}}
                 }
                 if(s.busy)LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
@@ -52,7 +53,13 @@ import java.time.format.DateTimeFormatter
                     "search"->SearchPage(s,vm,::open)
                     "episode"->EpisodePage(s,vm,::back)
                     "day"->TimelinePage(s,{vm.date(it)},::open)
-                    else->when(tab){0->TodayDashboard(s,{page="day"},{setup()},::open,{vm.refresh()},{vm.demo(it)},{vm.recording(if(s.policy.paused)"resume" else if(!s.policy.requested)"start" else "pause")},{val step=s.sources.firstOrNull{it.source==Source.STEPS};if(sourceReady(step))vm.reconnectSteps() else {vm.source(Source.STEPS,true);authorize(Source.STEPS)}});1->HistoryPage(s){vm.date(it);page="day"};else->MePage(s,{setup()},{page="settings"},{page="insights"},{vm.recording(if(s.policy.paused)"resume" else if(!s.policy.requested)"start" else "pause")},{vm.demo(true);tab=0})}
+                    "summary"->TodayDashboard(s,{page=""},{setup()},::open,{vm.refresh()},{vm.demo(it)},{vm.recording(if(s.policy.paused)"resume" else if(!s.policy.requested)"start" else "pause")},{val step=s.sources.firstOrNull{it.source==Source.STEPS};if(sourceReady(step))vm.reconnectSteps() else {vm.source(Source.STEPS,true);authorize(Source.STEPS)}})
+                    else->when(tab){
+                        0->TodayTimeline(s,vm::date,::open,{page="summary"},{vm.refresh()},{tab=2},{vm.demo(it)})
+                        1->HistoryPage(s){vm.date(it);page="day"}
+                        2->ConnectionsPage(s,authorize,vm::source,vm::appIncluded,vm::appNotices,vm::loadApps,{setup()},vm::reconnectSteps,{vm.message(it)})
+                        else->MePage(s,{setup()},{page="settings"},{page="insights"},{vm.recording(if(s.policy.paused)"resume" else if(!s.policy.requested)"start" else "pause")},{vm.demo(true);tab=0})
+                    }
                 } }
             }
         }
@@ -67,8 +74,8 @@ import java.time.format.DateTimeFormatter
 
 @Composable fun AppNavigation(selected: Int, onSelect: (Int)->Unit) {
     NavigationBar(containerColor=MaterialTheme.colorScheme.surface,tonalElevation=0.dp) {
-        val icons=listOf(Icons.Outlined.Home,Icons.Outlined.DateRange,Icons.Outlined.Person)
-        listOf("今天","回忆","我的").forEachIndexed { i,label ->
+        val icons=listOf(Icons.Outlined.Timeline,Icons.Outlined.DateRange,Icons.Outlined.Hub,Icons.Outlined.Person)
+        listOf("时间线","回忆","连接","我的").forEachIndexed { i,label ->
             NavigationBarItem(selected=selected==i,onClick={onSelect(i)},icon={Icon(icons[i],null)},label={Text(label)},colors=NavigationBarItemDefaults.colors(selectedIconColor=MaterialTheme.colorScheme.primary,selectedTextColor=MaterialTheme.colorScheme.primary,indicatorColor=MaterialTheme.colorScheme.primaryContainer))
         }
     }

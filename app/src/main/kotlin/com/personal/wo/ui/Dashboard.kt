@@ -72,7 +72,7 @@ import java.util.Locale
                 if(e.kind=="APP")AppBadge(e.packageName,e.title) else IconTile(episodeIcon(e),laneTint(e.lane),36)
                 Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
                     Text(e.title,style=MaterialTheme.typography.titleMedium)
-                    Muted("${laneName(e.lane)}${if(e.endMs>e.startMs)" · "+durationText(e.endMs-e.startMs) else ""}")
+                    Muted(if(e.endMs>e.startMs) "${clock(e.startMs,z)}–${clock(e.endMs,z)} · ${durationText(e.endMs-e.startMs)}" else laneName(e.lane))
                     if(e.assertion!=Assertion.RECORDED)Text(assertionName(e.assertion),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.primary)
                     if(e.isFavorite)Icon(Icons.Outlined.Favorite,"已收藏",Modifier.size(16.dp),tint=laneTint(Lane.LIFE))
                     if(e.photoUris.isNotEmpty())PhotoThumbnail(e.photoUris.first())
@@ -82,12 +82,31 @@ import java.util.Locale
     }
 }
 
-@Composable fun TimelinePage(s:WoUiState,onDate:(LocalDate)->Unit,onEpisode:(Episode)->Unit) {
+@Composable fun TodayTimeline(s:WoUiState,onDate:(LocalDate)->Unit,onEpisode:(Episode)->Unit,summary:()->Unit,refresh:()->Unit,connections:()->Unit,demo:(Boolean)->Unit) {
+    TimelinePage(s,onDate,onEpisode,home=true,summary=summary,refresh=refresh,connections=connections,demo=demo)
+}
+
+@Composable fun TimelinePage(s:WoUiState,onDate:(LocalDate)->Unit,onEpisode:(Episode)->Unit,home:Boolean=false,
+    summary:()->Unit={},refresh:()->Unit={},connections:()->Unit={},demo:(Boolean)->Unit={}) {
     val d=s.day ?: return
     var selected by rememberSaveable{mutableIntStateOf(-1)}
     var showMap by rememberSaveable{mutableStateOf(false)}
-    val entries=d.episodes.filter{selected<0||it.lane.ordinal==selected}.sortedBy{it.startMs}
-    LazyColumn(Modifier.testTag("timeline-list"),verticalArrangement=Arrangement.spacedBy(12.dp),contentPadding=PaddingValues(bottom=24.dp)) {
+    val entries=remember(d,selected){d.episodes.filter{selected<0||it.lane.ordinal==selected}.sortedBy{it.startMs}}
+    LazyColumn(Modifier.testTag(if(home)"timeline-home" else "timeline-list"),verticalArrangement=Arrangement.spacedBy(12.dp),contentPadding=PaddingValues(bottom=24.dp)) {
+        if(home)item {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                StatusPill(if(s.demo)"演示数据" else if(s.policy.paused)"已暂停" else if(s.policy.requested)"记录中" else "未开始")
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick=summary){Icon(Icons.Outlined.BarChart,null,Modifier.size(18.dp));Spacer(Modifier.width(4.dp));Text("一天总结")}
+                IconButton(onClick=refresh,enabled=!s.busy&&!s.demo){Icon(Icons.Outlined.Refresh,"更新时间线")}
+            }
+        }
+        if(home&&s.demo)item {
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Muted("虚构示例 · 不会存入你的记录",Modifier.weight(1f))
+                TextButton(onClick={demo(false)}){Text("退出演示")}
+            }
+        }
         item {
             Row(verticalAlignment=Alignment.CenterVertically) {
                 IconButton(onClick={onDate(LocalDate.parse(d.dayDate).minusDays(1))}){Icon(Icons.Outlined.KeyboardArrowLeft,"前一天")}
@@ -106,7 +125,13 @@ import java.util.Locale
             TextButton(onClick={showMap=!showMap}){Text(if(showMap)"收起位置分布" else "查看位置分布")}
             if(showMap)Footprints(d,s.positions,onEpisode)
         }
-        if(entries.isEmpty())item{Empty("这个日期暂无相关片段","换一个日期或分类查看。")}
+        if(entries.isEmpty())item{
+            Empty("这个日期暂无相关片段",if(home)"开启记录后，照片、活动与应用使用时段会依次出现在这里。" else "换一个日期或分类查看。")
+            if(home)Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick=connections){Text("连接应用与来源")}
+                TextButton(onClick={demo(true)}){Text("看看示例")}
+            }
+        }
         val groups=entries.groupBy {
             when(Instant.ofEpochMilli(it.startMs).atZone(ZoneId.of(d.zoneId)).hour){in 0..5->"凌晨";in 6..11->"上午";in 12..17->"下午";else->"晚上"}
         }

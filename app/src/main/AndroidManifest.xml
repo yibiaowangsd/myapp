@@ -26,6 +26,7 @@
     <uses-feature android:name="android.hardware.sensor.stepdetector" android:required="false" />
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
+        <package android:name="com.huawei.health" />
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
     </queries>
     <application android:name=".WoApplication" android:label="我" android:icon="@drawable/ic_wo" android:roundIcon="@drawable/ic_wo"

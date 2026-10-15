@@ -1,0 +1,133 @@
+{
+  "date": "2026-10-15T14:38:03.644945+08:00",
+  "version": "1.2.0",
+  "versionCode": 5,
+  "package": "com.personal.wo",
+  "databaseVersion": 1,
+  "build": "PASS",
+  "buildExitCode": 0,
+  "tests": [
+    {
+      "name": "com.personal.wo.core.DailyRecapTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T06:33:02.184Z"
+    },
+    {
+      "name": "com.personal.wo.core.DayPresentationTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T06:33:02.253Z"
+    },
+    {
+      "name": "com.personal.wo.core.EngineTest",
+      "tests": "33",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T06:33:02.273Z"
+    },
+    {
+      "name": "com.personal.wo.core.StepReadingsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T06:33:02.338Z"
+    },
+    {
+      "name": "com.personal.wo.core.StreamingCryptoTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T06:33:02.341Z"
+    },
+    {
+      "name": "com.personal.wo.DatabaseOpenCallbackTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T06:33:53.637Z"
+    },
+    {
+      "name": "com.personal.wo.DirectPermissionPlanTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T06:33:53.605Z"
+    },
+    {
+      "name": "com.personal.wo.StartupRecoveryTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T06:33:53.651Z"
+    },
+    {
+      "name": "com.personal.wo.StepSensorsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T06:33:53.695Z"
+    },
+    {
+      "name": "com.personal.wo.UiFlowTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T06:33:54.054Z"
+    }
+  ],
+  "testCount": 77,
+  "lintErrors": 0,
+  "uiRendering": "Robolectric API 35 native graphics; production Compose components; Android View.draw/Skia",
+  "uiImages": [
+    "01-permissions.png",
+    "02-photo-timeline.png",
+    "03-today.png",
+    "04-visuals.png",
+    "05-empty.png",
+    "06-large-text.png",
+    "07-dark.png",
+    "08-timeline.png",
+    "09-history.png",
+    "10-me.png",
+    "11-step-retry.png"
+  ],
+  "smallScreen": {
+    "widthDp": 360,
+    "heightDp": 800,
+    "fontScale": 1.5
+  },
+  "androidInstrumentation": "4 tests compiled; not run on device",
+  "huaweiPermissionScreens": "NOT_DEVICE_TESTED",
+  "apks": [
+    {
+      "apk": "Wo_Android_v1.2.0_Offline.apk",
+      "sha256": "a6f84c7678642fd280b00cd4e8490278d37541e9496f3611b5b39bb5f297a2ff",
+      "sizeBytes": 8980789,
+      "hasInternet": false,
+      "staticChecks": "PASS"
+    },
+    {
+      "apk": "Wo_Android_v1.2.0_Enhanced.apk",
+      "sha256": "8930b008147d47325a519ce77abaaca8b9ce0f079886d062567c991121bd7fce",
+      "sizeBytes": 9046349,
+      "hasInternet": true,
+      "staticChecks": "PASS"
+    }
+  ],
+  "r8MappingVerified": true,
+  "previousStartupFix": "DatabaseOpenCallback query + consumed and closed cursor retained",
+  "signatureContinuity": true
+}

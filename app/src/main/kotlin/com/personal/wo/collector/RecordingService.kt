@@ -14,10 +14,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.personal.wo.*
 import com.personal.wo.core.*
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import java.time.*
 
 class RecordingService:Service(),SensorEventListener,LocationListener {
+    private var startupJob:Job?=null
     private lateinit var thread:HandlerThread
     private lateinit var handler:Handler
     private lateinit var location:LocationManager
@@ -43,18 +44,27 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
     } }
     override fun onCreate() {
         super.onCreate()
-        recoverableCall { startRecording() }.onFailure { wo().diagnostics.record("记录服务启动",it);stopSelf() }
+        if(wo().currentGraph!=null) {
+            recoverableCall { startRecording() }.onFailure { wo().diagnostics.record("记录服务启动",it);stopSelf() }
+        } else startupJob=wo().scope.launch {
+            // A system restart may recreate the service before the encrypted policy has loaded.
+            recoverableTask {
+                withTimeout(3_500) { wo().graph() }
+                withContext(Dispatchers.Main) { startRecording() }
+            }.onFailure { wo().diagnostics.record("恢复后台记录",it);stopSelf() }
+        }
     }
     private fun startRecording() {
         startMs=System.currentTimeMillis();location=getSystemService(LocationManager::class.java);sensors=getSystemService(SensorManager::class.java)
-        val p=wo().currentGraph?.repo?.cachedPolicy
-        val loc=Capabilities.location(this)&&location.isLocationEnabled&&(p==null||Source.LOCATION in p.enabledSources)
-        val steps=Capabilities.steps(this)&&(p==null||Source.STEPS in p.enabledSources)
+        val plan=desiredPlan(this)
+        val loc=plan.location
+        val steps=plan.steps
         if(!loc&&!steps) { stopSelf();return }
         var types=if(loc) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
         if(steps&&Build.VERSION.SDK_INT>=34)types=types or ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
         try { ServiceCompat.startForeground(this,101,notification(this,"我正在整理今天",true),types) }
         catch(e:RuntimeException) { wo().diagnostics.record("前台服务权限",e);stopSelf();return }
+        activePlan=plan
         getSystemService(NotificationManager::class.java).cancel(102)
         thread=HandlerThread("wo-sensors").apply { start() };handler=Handler(thread.looper)
         wo().scope.launch { recoverableTask { val g=wo().graph();if(!g.repo.cachedPolicy.requested||g.repo.cachedPolicy.paused) { stopSelf();return@recoverableTask };handler.post { guardedSensors { register(steps);adjust();audit() } };WorkScheduling.schedule(this@RecordingService) }.onFailure { wo().diagnostics.record("恢复记录服务",it);stopSelf() } }
@@ -80,8 +90,10 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
                 }
             },45_000)
         }
-        registerMotion()
-        observer=object:ContentObserver(handler) { override fun onChange(selfChange:Boolean) { WorkScheduling.dayBuild(this@RecordingService);WorkScheduling.mediaPull(this@RecordingService) } }
+        if(desiredPlan(this).location)registerMotion()
+        observer=object:ContentObserver(handler) { override fun onChange(selfChange:Boolean) {
+            if(Source.PHOTO in wo().currentGraph!!.repo.cachedPolicy.enabledSources)WorkScheduling.mediaPull(this@RecordingService)
+        } }
         try { contentResolver.registerContentObserver(MediaStore.Files.getContentUri("external"),true,observer!!) } catch(e:SecurityException) { observer=null }
         if(Capabilities.location(this)&&Source.LOCATION in wo().currentGraph!!.repo.cachedPolicy.enabledSources) try { location.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER,60_000L,0f,this,thread.looper) } catch(e:SecurityException) { permissionLost() }
     }
@@ -204,6 +216,8 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
         handler.postDelayed({ guardedSensors { audit() } },300_000)
     }
     override fun onDestroy() {
+        startupJob?.cancel()
+        activePlan=null
         StepSensors.stopped()
         if(::handler.isInitialized) {
             handler.removeCallbacksAndMessages(null)
@@ -212,6 +226,11 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
         super.onDestroy()
     }
     companion object {
+        @Volatile private var activePlan:RecordingPlan?=null
+        fun desiredPlan(c:Context):RecordingPlan {
+            val p=c.wo().currentGraph?.repo?.cachedPolicy ?: return RecordingPlan()
+            return recordingPlan(p,Capabilities.location(c),c.getSystemService(LocationManager::class.java)?.isLocationEnabled==true,Capabilities.steps(c),Capabilities.granted(c,Manifest.permission.ACCESS_FINE_LOCATION))
+        }
         fun notification(c:Context,text:String,pause:Boolean):Notification {
             val manager=c.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(NotificationChannel("recording","记录状态",NotificationManager.IMPORTANCE_LOW).apply { setSound(null,null);enableVibration(false);setShowBadge(false) })
@@ -221,6 +240,14 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
             return b.build()
         }
         fun recoveryNotification(c:Context) { runCatching { c.getSystemService(NotificationManager::class.java).notify(102,notification(c,"点此继续记录",false)) } }
-        fun start(c:Context) { if(Capabilities.location(c)||Capabilities.steps(c)) runCatching { androidx.core.content.ContextCompat.startForegroundService(c,Intent(c,RecordingService::class.java)) } }
+        fun start(c:Context,force:Boolean=false) {
+            recoverableCall {
+                val plan=desiredPlan(c)
+                if(!plan.needed) { c.stopService(Intent(c,RecordingService::class.java));return }
+                if(!force&&activePlan==plan)return
+                if(activePlan!=null)c.stopService(Intent(c,RecordingService::class.java))
+                androidx.core.content.ContextCompat.startForegroundService(c,Intent(c,RecordingService::class.java))
+            }.onFailure { c.wo().diagnostics.record("启动后台记录",it) }
+        }
     }
 }

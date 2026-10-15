@@ -54,7 +54,19 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
     suspend fun configure(transform: (Policy) -> Policy) = mutex.withLock { db.withTransaction { savePolicy(transform(cachedPolicy).copy(generation=cachedPolicy.generation+1)) }; notifyChange() }
     suspend fun sources(): List<SourceState> = dao.sources().map { WoJson.decodeFromString(it.json) }
     suspend fun source(source: Source): SourceState = sources().firstOrNull { it.source==source } ?: SourceState(source)
-    suspend fun state(state: SourceState) = mutex.withLock { dao.putSource(SourceRow(state.source.name,WoJson.encodeToString(state))); notifyChange() }
+    suspend fun state(state: SourceState) = mutex.withLock {
+        val row=SourceRow(state.source.name,WoJson.encodeToString(state))
+        if(dao.sources().none { it==row }) { dao.putSource(row);notifyChange() }
+    }
+    suspend fun probed(fresh:List<SourceState>) = mutex.withLock {
+        val old=sources().associateBy { it.source }
+        val changed=fresh.map { s -> old[s.source]?.let { s.copy(lastSuccessMs=it.lastSuccessMs,cursor=it.cursor,freshness=it.freshness) } ?: s }
+            .filter { it!=old[it.source] }
+        if(changed.isNotEmpty()) {
+            db.withTransaction { changed.forEach { dao.putSource(SourceRow(it.source.name,WoJson.encodeToString(it))) } }
+            notifyChange()
+        }
+    }
     suspend fun log(code: String, count: Long = 0) = mutex.withLock { dao.putOperation(OperationRow(UUID.randomUUID().toString(),System.currentTimeMillis(),code,count)) }
     suspend fun ingest(batch: List<Observation>, expectedGeneration: Long, source: Source? = null, cursor: String? = null, coverageSpan: Span? = null, replaceSpan: Span? = null) = mutex.withLock {
         val p = cachedPolicy

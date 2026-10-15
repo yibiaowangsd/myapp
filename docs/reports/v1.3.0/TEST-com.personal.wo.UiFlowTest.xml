@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.UiFlowTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-15T07:28:58.316Z" hostname="4d93ee73a0a1" time="10.484">
+  <properties/>
+  <testcase name="connectionControlsRemainAccessibleWithLargeTextAndDarkTheme" classname="com.personal.wo.UiFlowTest" time="6.796"/>
+  <testcase name="sourcePageDisclosesHuaweiAccountNotConnectedAndShowsBackgroundHelp" classname="com.personal.wo.UiFlowTest" time="0.515"/>
+  <testcase name="stepConnectionFailureOffersRetryWithoutHealthConnect" classname="com.personal.wo.UiFlowTest" time="0.272"/>
+  <testcase name="timelineFiltersAndOpensAnEpisode" classname="com.personal.wo.UiFlowTest" time="0.305"/>
+  <testcase name="narrowScreenAndLargeTextKeepSetupAccessible" classname="com.personal.wo.UiFlowTest" time="0.219"/>
+  <testcase name="mePageKeepsPermissionsAndPrivacyReachable" classname="com.personal.wo.UiFlowTest" time="0.211"/>
+  <testcase name="photosStayInTheirTimePartAndCanOpenEvenWhenFileIsUnavailable" classname="com.personal.wo.UiFlowTest" time="0.168"/>
+  <testcase name="homeOpensTimelineWithSummaryOneTapAway" classname="com.personal.wo.UiFlowTest" time="0.332"/>
+  <testcase name="emptyDashboardOffersSetupAndDoesNotInventMeasurements" classname="com.personal.wo.UiFlowTest" time="0.215"/>
+  <testcase name="connectionSelectionUsesInstalledAppsAndRequestsSystemAccessDirectly" classname="com.personal.wo.UiFlowTest" time="0.469"/>
+  <testcase name="dashboardShowsActualDataAndScrollableVisuals" classname="com.personal.wo.UiFlowTest" time="0.374"/>
+  <testcase name="historyCalendarOpensSelectedDate" classname="com.personal.wo.UiFlowTest" time="0.245"/>
+  <testcase name="permissionsOpenSystemDirectlyAndOfferOneBatchAction" classname="com.personal.wo.UiFlowTest" time="0.18"/>
+  <testcase name="darkDashboardRendersAndExitsDemo" classname="com.personal.wo.UiFlowTest" time="0.181"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[[Robolectric] WARN: Android SDK 36 requires Java 21 (have Java 17). Tests won't be run on SDK 36 unless explicitly requested.
+]]></system-err>
+</testsuite>

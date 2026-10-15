@@ -24,12 +24,17 @@ import androidx.health.connect.client.permission.HealthPermission
 import kotlin.reflect.KClass
 
 class PullCollectors(private val c:Context,private val repo:WoRepository) {
+    private val pullGate=PullGate(android.os.SystemClock::elapsedRealtime)
     private val labels=mutableMapOf<String,String>()
     fun label(pkg:String):String = labels.getOrPut(pkg) { runCatching { c.packageManager.getApplicationLabel(c.packageManager.getApplicationInfo(pkg,0)).toString() }.getOrDefault(pkg) }.also { if(labels.size>200) labels.clear() }
-    suspend fun probe() { Capabilities.probe(c,repo.cachedPolicy).forEach { fresh -> val old=repo.source(fresh.source); repo.state(fresh.copy(lastSuccessMs=old.lastSuccessMs,cursor=old.cursor,freshness=old.freshness)) } }
-    suspend fun pull(foreground:Boolean=false) {
+    suspend fun probe() { repo.probed(Capabilities.probe(c,repo.cachedPolicy)) }
+    suspend fun pull(foreground:Boolean=false,force:Boolean=false) {
         if(!repo.cachedPolicy.requested||repo.cachedPolicy.paused)return
         if(!c.getSystemService(UserManager::class.java).isUserUnlocked)return
+        pullGate.run(force,foreground) { pullSources(foreground) }
+    }
+    private suspend fun pullSources(foreground:Boolean) {
+        if(!repo.cachedPolicy.requested||repo.cachedPolicy.paused)return
         val actions=listOf(Source.USAGE to suspend { usage() },Source.PHOTO to suspend { photos() },Source.CALENDAR to suspend { calendar() },Source.HEALTH to suspend { health(foreground) })
         actions.forEach { (source,action) ->
             if(source !in repo.cachedPolicy.enabledSources)return@forEach
