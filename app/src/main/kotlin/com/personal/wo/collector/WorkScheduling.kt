@@ -5,20 +5,24 @@ import android.app.NotificationManager
 import androidx.work.*
 import com.personal.wo.wo
 import com.personal.wo.MainActivity
+import com.personal.wo.recoverableCall
+import com.personal.wo.recoverableTask
 import com.personal.wo.core.*
 import kotlinx.coroutines.*
 import java.time.*
 import java.util.concurrent.TimeUnit
 
 object WorkScheduling {
-    fun schedule(c:Context) {
+    private fun guarded(c:Context,action:()->Unit):Boolean = recoverableCall(action)
+        .onFailure { c.wo().diagnostics.record("后台调度",it) }.isSuccess
+    fun schedule(c:Context) = guarded(c) {
         val w=WorkManager.getInstance(c)
         w.enqueueUniquePeriodicWork("wo.incremental",ExistingPeriodicWorkPolicy.KEEP,PeriodicWorkRequestBuilder<IncrementalPullWorker>(30,TimeUnit.MINUTES).addTag("wo.recording").build())
         w.enqueueUniquePeriodicWork("wo.maintenance",ExistingPeriodicWorkPolicy.KEEP,PeriodicWorkRequestBuilder<MaintenanceWorker>(1,TimeUnit.DAYS).setConstraints(Constraints.Builder().setRequiresCharging(true).setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build()).build())
     }
-    fun dayBuild(c:Context) { WorkManager.getInstance(c).enqueueUniqueWork("wo.day-build",ExistingWorkPolicy.KEEP,OneTimeWorkRequestBuilder<DayBuildWorker>().setInitialDelay(5,TimeUnit.MINUTES).addTag("wo.recording").build()) }
-    fun mediaPull(c:Context) { WorkManager.getInstance(c).enqueueUniqueWork("wo.media-index",ExistingWorkPolicy.KEEP,OneTimeWorkRequestBuilder<IncrementalPullWorker>().setInitialDelay(1,TimeUnit.MINUTES).addTag("wo.recording").build()) }
-    fun pause(c:Context) { WorkManager.getInstance(c).cancelAllWorkByTag("wo.recording") }
+    fun dayBuild(c:Context) = guarded(c) { WorkManager.getInstance(c).enqueueUniqueWork("wo.day-build",ExistingWorkPolicy.KEEP,OneTimeWorkRequestBuilder<DayBuildWorker>().setInitialDelay(5,TimeUnit.MINUTES).addTag("wo.recording").build()) }
+    fun mediaPull(c:Context) = guarded(c) { WorkManager.getInstance(c).enqueueUniqueWork("wo.media-index",ExistingWorkPolicy.KEEP,OneTimeWorkRequestBuilder<IncrementalPullWorker>().setInitialDelay(1,TimeUnit.MINUTES).addTag("wo.recording").build()) }
+    fun pause(c:Context) = guarded(c) { WorkManager.getInstance(c).cancelAllWorkByTag("wo.recording") }
 }
 class IncrementalPullWorker(c:Context,p:WorkerParameters):CoroutineWorker(c,p) {
     override suspend fun doWork():Result { return try {
@@ -40,7 +44,7 @@ class MaintenanceWorker(c:Context,p:WorkerParameters):CoroutineWorker(c,p) {
 class RecoveryReceiver:BroadcastReceiver() {
     override fun onReceive(c:Context,intent:Intent) {
         val pending=goAsync()
-        c.wo().scope.launch { try {
+        c.wo().scope.launch { try { recoverableTask {
             c.wo().initialize();val g=c.wo().graph();val p=g.repo.cachedPolicy
             if(intent.action in listOf(Intent.ACTION_TIME_CHANGED,Intent.ACTION_TIMEZONE_CHANGED)) {
                 g.repo.log("CLOCK_SEGMENT_CHANGED")
@@ -54,11 +58,11 @@ class RecoveryReceiver:BroadcastReceiver() {
                 // A tap is a reliable legal entry on every supported Android version.
                 RecordingService.recoveryNotification(c)
             }
-        } finally { pending.finish() } }
+        }.onFailure { c.wo().diagnostics.record("系统恢复入口",it) } } finally { pending.finish() } }
     }
 }
 class PauseReceiver:BroadcastReceiver() {
     override fun onReceive(c:Context,intent:Intent) {
-        val result=goAsync();c.wo().scope.launch { try { c.wo().graph().repo.command("pause");c.stopService(Intent(c,RecordingService::class.java));WorkScheduling.pause(c) } finally { result.finish() } }
+        val result=goAsync();c.wo().scope.launch { try { recoverableTask { c.wo().graph().repo.command("pause");c.stopService(Intent(c,RecordingService::class.java));WorkScheduling.pause(c) }.onFailure { c.wo().diagnostics.record("暂停入口",it) } } finally { result.finish() } }
     }
 }

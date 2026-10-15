@@ -16,8 +16,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModelProvider
-import androidx.health.connect.client.PermissionController
 import com.personal.wo.collector.Capabilities
+import com.personal.wo.collector.OptionalHealthPermissionContract
 import com.personal.wo.core.Source
 import com.personal.wo.ui.*
 import kotlinx.coroutines.launch
@@ -27,26 +27,45 @@ class MainActivity:ComponentActivity() {
     private val unlocked=mutableStateOf(false)
     private var stoppedAt=0L
     private var prompt:CancellationSignal?=null
-    private val permissions=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.refresh(true) }
-    private val health=registerForActivityResult(PermissionController.createRequestPermissionResultContract()) { vm.refresh(true) }
+    private val permissions=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { if(::vm.isInitialized)vm.refresh(true) }
+    private val health=registerForActivityResult(OptionalHealthPermissionContract()) { if(::vm.isInitialized)vm.refresh(true) }
     private val archive=registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> uri?.let { vm.export(it,true) } }
     private val summary=registerForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri -> uri?.let { vm.export(it,false) } }
     private val summaryJson=registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let { vm.export(it,false,true) } }
     private val openArchive=registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { restoreUri.value=it } }
     private val restoreUri=mutableStateOf<android.net.Uri?>(null)
     override fun onCreate(savedInstanceState:Bundle?) {
-        super.onCreate(savedInstanceState);enableEdgeToEdge();vm=ViewModelProvider(this)[WoViewModel::class.java]
+        super.onCreate(savedInstanceState)
+        recoverableCall { enableEdgeToEdge() }.onFailure { wo().diagnostics.record("窗口适配",it) }
+        val created=recoverableCall { ViewModelProvider(this)[WoViewModel::class.java] }
+        created.exceptionOrNull()?.let { error ->
+            val report=wo().diagnostics.record("页面状态初始化",error)
+            setContent { WoTheme { StartupFailureScreen(report,{recreate()},{copyDiagnostic(report)}) } }
+            return
+        }
+        vm=created.getOrThrow()
         setContent {
             val state by vm.state.collectAsState()
-            LaunchedEffect(state.loaded,state.policy.lockUi) { if(state.loaded) { if(state.policy.lockUi&&stoppedAt==0L) { unlocked.value=false;authenticate() } else if(!state.policy.lockUi)unlocked.value=true } }
-            WoTheme { if(unlocked.value) WoAppUi(vm,{ authorize(it) },{ background() },{ kind -> when(kind) { "archive"->archive.launch("Wo_Backup.woarchive");"json"->summaryJson.launch("Wo_${state.selectedDate}.json");"restore"->openArchive.launch(arrayOf("*/*"));else->summary.launch("Wo_${state.selectedDate}.md") } },restoreUri.value,{restoreUri.value=null},{on->
+            LaunchedEffect(state.loaded,state.policy.lockUi,state.startupError) { if(state.loaded&&state.startupError==null) { if(state.policy.lockUi&&stoppedAt==0L) { unlocked.value=false;authenticate() } else if(!state.policy.lockUi)unlocked.value=true } }
+            WoTheme { if(state.startupError!=null) StartupFailureScreen(state.startupError!!,vm::retryStartup,{copyDiagnostic(state.startupError!!)})
+            else if(!state.loaded) StartupLoadingScreen()
+            else if(unlocked.value) WoAppUi(vm,{ authorize(it) },{ background() },{ kind -> when(kind) { "archive"->archive.launch("Wo_Backup.woarchive");"json"->summaryJson.launch("Wo_${state.selectedDate}.json");"restore"->openArchive.launch(arrayOf("*/*"));else->summary.launch("Wo_${state.selectedDate}.md") } },restoreUri.value,{restoreUri.value=null},{on->
                 if(on&&!getSystemService(KeyguardManager::class.java).isDeviceSecure)vm.message("请先设置手机系统锁屏，再开启查看锁") else vm.lock(on)
             }) else UnlockScreen { authenticate() } }
+        }
+    }
+    private fun copyDiagnostic(report:String) {
+        recoverableCall {
+            getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("我 · 启动诊断",report))
+            android.widget.Toast.makeText(this,"诊断已复制，不含生活记录与密钥",android.widget.Toast.LENGTH_SHORT).show()
         }
     }
     override fun onResume() { super.onResume();if(::vm.isInitialized) { if(vm.state.value.policy.lockUi&&stoppedAt>0&&SystemClock.elapsedRealtime()-stoppedAt>60_000) { unlocked.value=false;authenticate() };vm.foreground() } }
     override fun onStop() { stoppedAt=SystemClock.elapsedRealtime();prompt?.cancel();if(::vm.isInitialized)vm.background();ThumbnailCache.cache.evictAll();super.onStop() }
     private fun authenticate() {
+        recoverableCall { showAuthentication() }.onFailure { wo().diagnostics.record("查看身份验证",it);if(::vm.isInitialized)vm.message("系统身份验证暂不可用，请重试") }
+    }
+    private fun showAuthentication() {
         if(!getSystemService(KeyguardManager::class.java).isDeviceSecure) { unlocked.value=true;return }
         val builder=BiometricPrompt.Builder(this).setTitle("查看我的一天").setSubtitle("使用系统生物识别或锁屏凭据")
         if(Build.VERSION.SDK_INT>=30)builder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL) else builder.setDeviceCredentialAllowed(true)
@@ -64,7 +83,7 @@ class MainActivity:ComponentActivity() {
             Source.CALENDAR->arrayOf(Manifest.permission.READ_CALENDAR)
             else->emptyArray()
         }
-        if(source==Source.HEALTH) { runCatching { health.launch(Capabilities.healthPermissions()) }.onFailure { vm.message("此设备没有可用的Health Connect授权入口") };return }
+        if(source==Source.HEALTH) { recoverableCall { health.launch(Capabilities.healthPermissions()) }.onFailure { vm.message("此设备没有可用的Health Connect授权入口") };return }
         if(ordinary.isNotEmpty()) { permissions.launch(ordinary);return }
         runCatching { startActivity(Capabilities.special(this,source)) }.onFailure { vm.message("系统没有提供此授权入口，请使用应用设置") }
     }

@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.os.UserManager
 import androidx.room.Room
+import androidx.work.Configuration
 import com.personal.wo.core.*
 import com.personal.wo.data.*
 import com.personal.wo.collector.*
@@ -13,22 +14,39 @@ import kotlinx.serialization.decodeFromString
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.util.concurrent.atomic.AtomicLong
 
-class WoApplication : Application() {
+class WoApplication : Application(), Configuration.Provider {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val ready = CompletableDeferred<Graph>()
+    @Volatile private var ready = CompletableDeferred<Graph>()
     private var initializing=false
     @Volatile var currentGraph: Graph? = null; private set
-    override fun onCreate() { super.onCreate(); initialize() }
+    val diagnostics by lazy { StartupDiagnostics(this) }
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().setMinimumLoggingLevel(android.util.Log.WARN).build()
+    override fun onCreate() { super.onCreate();diagnostics.installCrashRecorder();initialize() }
     @Synchronized fun initialize() {
-        if (!getSystemService(UserManager::class.java).isUserUnlocked || ready.isCompleted || initializing) return
+        if (ready.isCompleted || initializing) return
         initializing=true
+        val attempt=ready
         scope.launch {
-            synchronized(this@WoApplication) { if (currentGraph != null) return@launch }
-            runCatching { Graph(this@WoApplication).also { it.repo.initialize() } }.fold(
-                onSuccess = { currentGraph = it; ready.complete(it) }, onFailure = { ready.completeExceptionally(it) })
+            var candidate:Graph?=null
+            val result=recoverableTask {
+                check(getSystemService(UserManager::class.java)?.isUserUnlocked != false) { "设备尚未解锁" }
+                Graph(this@WoApplication).also { candidate=it;it.repo.initialize() }
+            }
+            result.fold(onSuccess = {
+                synchronized(this@WoApplication) { currentGraph=it;initializing=false;attempt.complete(it) }
+            }, onFailure = {
+                candidate?.let { g -> recoverableCall { g.close() } }
+                diagnostics.record("数据库与本地组件初始化",it)
+                synchronized(this@WoApplication) { initializing=false;attempt.completeExceptionally(it) }
+            })
         }
     }
-    suspend fun graph(): Graph { initialize(); return ready.await() }
+    suspend fun graph(): Graph { val attempt=synchronized(this) { initialize();ready };return attempt.await() }
+    @Synchronized fun retryInitialization() {
+        if (currentGraph==null && ready.isCompleted && !initializing) ready=CompletableDeferred()
+        initialize()
+    }
     fun submit(observation: Observation) { currentGraph?.offer(observation) }
 }
 
@@ -68,6 +86,7 @@ class Graph(val context: Context) {
         if(!p.requested || p.paused)return
         if(queue.trySend(Submission(o,p.generation)).isFailure) dropped.incrementAndGet()
     }
+    fun close() { scope.cancel();queue.cancel();db.close() }
 }
 
 fun Context.wo(): WoApplication = applicationContext as WoApplication

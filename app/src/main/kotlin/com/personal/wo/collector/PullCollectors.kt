@@ -12,6 +12,7 @@ import android.provider.MediaStore
 import android.database.Cursor
 import com.personal.wo.core.*
 import com.personal.wo.data.WoRepository
+import com.personal.wo.recoverableTask
 import kotlinx.coroutines.*
 import java.time.*
 import androidx.health.connect.client.HealthConnectClient
@@ -32,8 +33,11 @@ class PullCollectors(private val c:Context,private val repo:WoRepository) {
         val actions=listOf(Source.USAGE to suspend { usage() },Source.PHOTO to suspend { photos() },Source.CALENDAR to suspend { calendar() },Source.HEALTH to suspend { health(foreground) })
         actions.forEach { (source,action) ->
             if(source !in repo.cachedPolicy.enabledSources)return@forEach
-            try { action() } catch(e:CancellationException) { throw e } catch(e:SecurityException) { repo.state(repo.source(source).copy(authorization="DENIED",runtime="STOPPED",detail="P001:权限已撤回")) }
-            catch(e:Exception) { repo.state(repo.source(source).copy(runtime="ERROR",detail="S001:来源暂时不可用（${e.javaClass.simpleName}）")); repo.log("SOURCE_${source.name}_FAILED") }
+            if(!repo.source(source).supported)return@forEach
+            recoverableTask(action).onFailure { e ->
+                if(e is SecurityException)repo.state(repo.source(source).copy(authorization="DENIED",runtime="STOPPED",detail="P001:权限已撤回"))
+                else { repo.state(repo.source(source).copy(runtime="ERROR",detail="S001:来源暂时不可用（${e.javaClass.simpleName}）"));repo.log("SOURCE_${source.name}_FAILED") }
+            }
         }
         repo.heartbeat()
     }

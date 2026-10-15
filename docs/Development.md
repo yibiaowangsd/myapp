@@ -2,9 +2,9 @@
 
 文档更新：2026-10-15（Asia/Shanghai）
 
-对应应用版本：1.0.0；数据库版本：Room V1；包名：`com.personal.wo`。
+对应应用版本：1.0.1；数据库版本：Room V1；包名：`com.personal.wo`。
 
-本仓库保存上一轮已编译交付的源码、当前实现设计及原始验证证据。应用逻辑保持该交付版本；本次主要补齐设计与开发文档、文档导航及文件校验清单。
+本仓库包含 1.0.0 基础功能与 1.0.1 启动兼容修复。最新构建结果见 Verification.md，原 1.0.0 验证记录保存在 archive/v1.0.0/。修复范围和实际设备验证边界见 [HarmonyOS 启动修复说明](HarmonyOS_4.2.0_Startup_Fix.md)。
 
 ## 1. 阅读入口
 
@@ -54,6 +54,8 @@
 | `app/.../data/BackupService.kt` | 流式归档、预检、暂存恢复、每日文本导出 |
 | `app/.../data/EnhancedSummary.kt` | 可选 HTTPS 事实排序协议与额度 |
 | `app/.../MainActivity.kt` | 权限/设置入口、身份验证、文件选择与生命周期 |
+| `app/.../StartupRecovery.kt` / `StartupDiagnostics.kt` | 可恢复错误边界、逐项来源隔离及不依赖数据库的诊断 |
+| `app/.../ui/StartupScreens.kt` | 加载、失败、重试与本人主动复制诊断 |
 | `app/.../ui/` | ViewModel、Compose 页面、时间轴、回放、足迹与缩略图 |
 | `app/src/main/assets/default_config.json` | 默认算法与预算参数 |
 | `app/schemas/` / `contracts/schema.sql` | 实际 Room V1 导出结构与生成的可读 DDL |
@@ -107,7 +109,7 @@ DayEngine 在归档时区内按半开时间区间生成 DayView；数据发生�
 在仓库根目录执行；Windows 使用 `gradlew.bat`。源码不含签名私钥，Debug 使用标准调试签名。
 
 ```bash
-./gradlew :core:test
+./gradlew :core:test :app:testPersonalOfflineDebugUnitTest
 ./gradlew :app:lintPersonalOfflineDebug :app:lintPersonalEnhancedDebug
 ./gradlew :app:assemblePersonalOfflineDebug :app:assemblePersonalEnhancedDebug
 ./gradlew :app:assemblePersonalOfflineDebugAndroidTest
@@ -122,7 +124,7 @@ python3 scripts/verify_schema.py
 
 Debug 支持 arm64-v8a 和 x86_64。标准 APK 输出在 `app/build/outputs/apk/<flavor>/<buildType>/`；本地单元测试报告在 `core/build/test-results/test/`；Lint 报告在 `app/build/reports/`。
 
-当前核心测试 33 项、流式加密测试 2 项，原构建共 35 项通过。AndroidTest 3 项覆盖实际 SQLCipher 文件加密、重复/暂停/删除持久性、归档认证失败与恢复往返；只完成编译，尚未执行。已保存的 `docs/reports/` 是原构建记录，本次文档整理没有重新执行 Gradle 构建。
+当前核心测试 33 项、流式加密测试 2 项，另有 8 项启动恢复回归测试，共 43 项 JVM 测试通过。AndroidTest 3 项覆盖实际 SQLCipher 文件加密、重复/暂停/删除持久性、归档认证失败与恢复往返；只完成编译，尚未执行。`docs/reports/` 保留原构建记录，`docs/reports/v1.0.1/` 保存本次重跑结果；设备测试仍未执行。
 
 ## 7. Release 与升级签名
 
@@ -144,7 +146,7 @@ Release 只包含 arm64-v8a，启用 R8 和资源压缩。使用个人签名备�
 静态检查脚本需要 APK 路径和 Android SDK 路径：
 
 ```bash
-python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.0.0_Offline.apk /absolute/path/android-sdk
+python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.0.1_Offline.apk /absolute/path/android-sdk
 ```
 
 脚本检查签名、min/targetSdk、离线 INTERNET 移除、APK zipalign 以及原生 ELF 16 KiB 对齐。它不能替代 16 KiB Android 设备上的运行验证。离线 APK 文件名应含 `Offline` 或 `personalOffline`，因为脚本据此选择网络权限断言。
@@ -202,4 +204,12 @@ python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.0.0_Offline.apk /abs
 
 `docs/Source_SHA256.json` 记录除自身外的仓库交付文件 SHA-256，用于比对来源。更新文件后重新生成清单，保留原始设计和历史验证时间；新增验证应明确实际执行日期和环境。
 
-仓库不包含安装包、原始生活数据、恢复码、签名私钥、API 密钥或本机 SDK 配置。个人签名备份需由本人另行保管。源码上传不改变 APK 版本和签名。
+仓库不包含安装包、原始生活数据、恢复码、签名私钥、API 密钥或本机 SDK 配置。个人签名备份需由本人另行保管。1.0.1 提升 versionCode 到 2，复用原 Release 签名与数据库结构，可覆盖升级。
+
+## 12. 启动兼容约束
+
+WorkManager 采用 Configuration.Provider 按需初始化，Manifest 只移除默认 WorkManagerInitializer 元数据。所有调用仍使用 WorkManager.getInstance(context)，无需重复手动 initialize。
+
+初始化、前台恢复及系统监听入口处理 Exception 与 LinkageError；CancellationException 必须继续传播，虚拟机故障不作普通错误吞掉。可选来源按来源分别探测，权限拒绝保留 UNKNOWN 与可授权入口，接口/类确实不可用才标记不支持。Health Connect 权限契约延后到本人授权时创建。
+
+失败诊断独立于数据库，保存在私有 noBackup 目录。不要将原始异常中的业务消息、通知内容、密钥或数据库查询数据写入诊断。重试关闭失败 Graph 的通道与作用域后重新初始化，不清除或迁移原始数据库。

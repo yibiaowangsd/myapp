@@ -18,6 +18,7 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.*
 import com.personal.wo.core.*
+import com.personal.wo.probeSource
 
 object Capabilities {
     fun granted(c:Context,p:String)=ContextCompat.checkSelfPermission(c,p)==PackageManager.PERMISSION_GRANTED
@@ -28,23 +29,29 @@ object Capabilities {
     fun steps(c:Context)=granted(c,Manifest.permission.ACTIVITY_RECOGNITION) && c.getSystemService(SensorManager::class.java).getDefaultSensor(Sensor.TYPE_STEP_COUNTER)!=null
     fun healthPermissions():Set<String> = setOf(HealthPermission.getReadPermission(StepsRecord::class),HealthPermission.getReadPermission(SleepSessionRecord::class),HealthPermission.getReadPermission(ExerciseSessionRecord::class))
     suspend fun probe(c:Context,p:Policy):List<SourceState> {
-        val sm=c.getSystemService(SensorManager::class.java); val lm=c.getSystemService(LocationManager::class.java)
         fun s(source:Source,grant:Boolean,support:Boolean=true,detail:String="",partial:Boolean=false)=SourceState(source,support,if(grant) if(partial) "PARTIAL" else "GRANTED" else "DENIED",if(!p.requested) "STOPPED" else if(p.paused) "PAUSED" else if(grant&&support) "RUNNING" else "STOPPED",detail=detail)
-        val photo=if(Build.VERSION.SDK_INT>=33) granted(c,Manifest.permission.READ_MEDIA_IMAGES)||granted(c,Manifest.permission.READ_MEDIA_VIDEO) else granted(c,Manifest.permission.READ_EXTERNAL_STORAGE)
-        val partial=Build.VERSION.SDK_INT>=34 && granted(c,Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) && !photo
-        val hc=runCatching { HealthConnectClient.getSdkStatus(c)==HealthConnectClient.SDK_AVAILABLE }.getOrDefault(false)
-        val hp=if(hc) runCatching { HealthConnectClient.getOrCreate(c).permissionController.getGrantedPermissions() }.getOrDefault(emptySet()) else emptySet()
-        return listOf(
-            s(Source.USAGE,usage(c),detail="公开UsageEvents；统计活动区间并去除重叠"),
-            s(Source.LOCATION,location(c),lm.allProviders.any { it!=LocationManager.PASSIVE_PROVIDER },if(!lm.isLocationEnabled) "系统定位开关关闭" else "框架定位；无需Google服务"),
-            s(Source.STEPS,granted(c,Manifest.permission.ACTIVITY_RECOGNITION),sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)!=null,"硬件计步；不使用全天加速度计采样"),
-            s(Source.NOTIFICATION,notices(c),detail="只记录授权后的通知片段；正文解析需要单独选择应用"),
-            s(Source.MEDIA,notices(c),detail="通过媒体会话被动观察；不控制播放"),
-            s(Source.PHOTO,photo||partial,detail=if(partial) "仅访问本人选定的媒体" else "索引元数据，不复制图库",partial=partial),
-            s(Source.CALENDAR,granted(c,Manifest.permission.READ_CALENDAR),detail="日历只作为计划，不认定实际出席"),
-            s(Source.HEALTH,hp.any { it in healthPermissions() },hc,if(!hc) "Health Connect未提供；其他功能可以继续" else "步数聚合、运动与睡眠来源"),
-            s(Source.ACCESSIBILITY,window(c),detail="可选窗口包名；不读取屏幕正文、不执行手势")
-        ).map { if(it.source !in p.enabledSources) it.copy(runtime="STOPPED",detail="本人已关闭此来源") else it }
+        return Source.entries.map { source -> probeSource(source,p) { when(source) {
+            Source.USAGE -> s(source,usage(c),detail="公开UsageEvents；统计活动区间并去除重叠")
+            Source.LOCATION -> {
+                val lm=c.getSystemService(LocationManager::class.java)
+                s(source,location(c),lm!=null&&lm.allProviders.any { it!=LocationManager.PASSIVE_PROVIDER },if(lm?.isLocationEnabled!=true) "系统定位开关关闭" else "框架定位；无需Google服务")
+            }
+            Source.STEPS -> s(source,granted(c,Manifest.permission.ACTIVITY_RECOGNITION),c.getSystemService(SensorManager::class.java)?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)!=null,"硬件计步；不使用全天加速度计采样")
+            Source.NOTIFICATION -> s(source,notices(c),detail="只记录授权后的通知片段；正文解析需要单独选择应用")
+            Source.MEDIA -> s(source,notices(c),detail="通过媒体会话被动观察；不控制播放")
+            Source.PHOTO -> {
+                val photo=if(Build.VERSION.SDK_INT>=33)granted(c,Manifest.permission.READ_MEDIA_IMAGES)||granted(c,Manifest.permission.READ_MEDIA_VIDEO) else granted(c,Manifest.permission.READ_EXTERNAL_STORAGE)
+                val partial=Build.VERSION.SDK_INT>=34&&granted(c,Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)&&!photo
+                s(source,photo||partial,detail=if(partial)"仅访问本人选定的媒体" else "索引元数据，不复制图库",partial=partial)
+            }
+            Source.CALENDAR -> s(source,granted(c,Manifest.permission.READ_CALENDAR),detail="日历只作为计划，不认定实际出席")
+            Source.HEALTH -> {
+                val available=HealthConnectClient.getSdkStatus(c)==HealthConnectClient.SDK_AVAILABLE
+                val permissions=if(available)HealthConnectClient.getOrCreate(c).permissionController.getGrantedPermissions() else emptySet()
+                s(source,permissions.isNotEmpty()&&permissions.any { it in healthPermissions() },available,if(!available)"Health Connect未提供；其他功能可以继续" else "步数聚合、运动与睡眠来源")
+            }
+            Source.ACCESSIBILITY -> s(source,window(c),detail="可选窗口包名；不读取屏幕正文、不执行手势")
+        } } }
     }
     fun sourceName(s:Source)=when(s) { Source.USAGE->"应用活动";Source.LOCATION->"位置与足迹";Source.STEPS->"硬件步数";Source.NOTIFICATION->"通知线索";Source.MEDIA->"媒体播放";Source.PHOTO->"照片与视频";Source.CALENDAR->"日历计划";Source.HEALTH->"活动与健康";Source.ACCESSIBILITY->"窗口切换增强" }
     fun special(c:Context,source:Source):Intent=when(source) {

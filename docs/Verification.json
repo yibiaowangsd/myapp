@@ -1,11 +1,43 @@
 {
-  "date": "2026-10-15T03:18:08.820983+08:00",
+  "date": "2026-10-15T09:18:49.527450+08:00",
+  "version": "1.0.1",
+  "versionCode": 2,
+  "package": "com.personal.wo",
+  "databaseVersion": 1,
   "build": "PASS",
+  "buildExitCode": 0,
   "unitTests": [
+    {
+      "suite": "com.personal.wo.core.StreamingCryptoTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "cases": [
+        "fullLargeStreamRoundTripAndAuthentication",
+        "independentRecoveryKeyWrapsKeyset"
+      ]
+    },
+    {
+      "suite": "com.personal.wo.StartupRecoveryTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "cases": [
+        "fatalVmFailureIsNotSilentlyHidden",
+        "nativeLoadFailureDoesNotEscapeTheStartupBoundary",
+        "diagnosticOmitsExceptionMessagesContainingPrivateData",
+        "initializationFailureBecomesAnInspectableResult",
+        "coroutineCancellationIsNotReportedAsADeviceFailure",
+        "deniedSystemProbeDoesNotBecomeAZeroMetric",
+        "disabledProviderIsNeverInitialized",
+        "missingOptionalProviderDoesNotPreventOtherSources"
+      ]
+    },
     {
       "suite": "com.personal.wo.core.EngineTest",
       "tests": 33,
-      "time": "0.188",
+      "failures": 0,
+      "errors": 0,
       "cases": [
         "screenOnDoesNotBypassKnownKeyguard",
         "correctedFactsRetainUserConfirmation",
@@ -41,35 +73,26 @@
         "pauseBarrierStopsContinuity",
         "mediaPauseIsNotPlayback"
       ]
-    },
-    {
-      "suite": "com.personal.wo.core.StreamingCryptoTest",
-      "tests": 2,
-      "time": "0.478",
-      "cases": [
-        "fullLargeStreamRoundTripAndAuthentication",
-        "independentRecoveryKeyWrapsKeyset"
-      ]
     }
   ],
-  "testCount": 35,
+  "testCount": 43,
   "lint": [
     {
-      "variant": "personalOffline",
+      "report": "lint-results-personalEnhancedDebug.xml",
       "errors": 0,
-      "warnings": 19
+      "warnings": 11
     },
     {
-      "variant": "personalEnhanced",
+      "report": "lint-results-personalOfflineDebug.xml",
       "errors": 0,
-      "warnings": 13
+      "warnings": 11
     }
   ],
   "apkChecks": [
     {
-      "apk": "Wo_Android_v1.0.0_Offline.apk",
-      "sizeBytes": 8898445,
-      "sha256": "fdce1d72d5fbd77733d7ba07ee880418bb02e6dc8a9084de84a1371ab88dba14",
+      "apk": "Wo_Android_v1.0.1_Offline.apk",
+      "sizeBytes": 8931193,
+      "sha256": "67f002e15484da8494b2a6eb0bbc22719f7b8f75c747bab4d929f66043c595f0",
       "hasInternet": false,
       "signature": [
         "Verifies",
@@ -112,9 +135,9 @@
       "runtimeDeviceTests": "NOT_RUN"
     },
     {
-      "apk": "Wo_Android_v1.0.0_Enhanced.apk",
-      "sizeBytes": 8980389,
-      "sha256": "8548c8c155a6a1192dcb50a909c1563482171933e3c972d6ec8f7cb72fbe83bc",
+      "apk": "Wo_Android_v1.0.1_Enhanced.apk",
+      "sizeBytes": 8996745,
+      "sha256": "db1fce2560643150b84e9f47ac9f5f0f347a479ca8ad60659556c26b9628f11f",
       "hasInternet": true,
       "signature": [
         "Verifies",
@@ -157,8 +180,13 @@
       "runtimeDeviceTests": "NOT_RUN"
     }
   ],
+  "sameSigningCertificateAsV1_0_0": true,
+  "defaultWorkManagerInitializerRemoved": true,
+  "finalListenerFixPresentInBothApks": true,
   "schema": "PASS:17 entities,unique source key,FTS4,integrity_check",
   "deviceTests": "NOT_RUN",
+  "HarmonyOS4_2_0DeviceValidation": "NOT_RUN",
+  "deviceSpecificCrashTrigger": "UNCONFIRMED_NO_DEVICE_LOG",
   "batteryAnd7DayTests": "NOT_RUN",
-  "deviceBlocker": "No working hardware acceleration; API36 emulator failed to boot in current environment"
+  "previousReport": "archive/v1.0.0/Verification.json"
 }

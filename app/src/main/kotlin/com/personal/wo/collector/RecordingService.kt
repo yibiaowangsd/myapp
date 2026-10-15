@@ -30,15 +30,19 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
     private var powerMode="NORMAL";private var recoverySince=0L
     private var candidateSince=0L;private var candidateFixes=0
     private val gpsListener=object:LocationListener {
-        override fun onLocationChanged(fix:Location) { onFix(fix);location.removeUpdates(this) }
+        override fun onLocationChanged(fix:Location) { guardedSensors { onFix(fix);location.removeUpdates(this) } }
         override fun onProviderEnabled(provider:String)=Unit
         override fun onProviderDisabled(provider:String)=Unit
     }
     private val motion=object:TriggerEventListener() { override fun onTrigger(event:TriggerEvent?) {
-        movementAt=System.currentTimeMillis();handler.post { adjust();maybeGnss();registerMotion() }
+        movementAt=System.currentTimeMillis();handler.post { guardedSensors { adjust();maybeGnss();registerMotion() } }
     } }
     override fun onCreate() {
-        super.onCreate();startMs=System.currentTimeMillis();location=getSystemService(LocationManager::class.java);sensors=getSystemService(SensorManager::class.java)
+        super.onCreate()
+        recoverableCall { startRecording() }.onFailure { wo().diagnostics.record("记录服务启动",it);stopSelf() }
+    }
+    private fun startRecording() {
+        startMs=System.currentTimeMillis();location=getSystemService(LocationManager::class.java);sensors=getSystemService(SensorManager::class.java)
         val p=wo().currentGraph?.repo?.cachedPolicy
         val loc=Capabilities.location(this)&&location.isLocationEnabled&&(p==null||Source.LOCATION in p.enabledSources)
         val steps=Capabilities.steps(this)&&(p==null||Source.STEPS in p.enabledSources)
@@ -46,11 +50,12 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
         var types=if(loc) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
         if(steps&&Build.VERSION.SDK_INT>=34)types=types or ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
         try { ServiceCompat.startForeground(this,101,notification(this,"我正在整理今天",true),types) }
-        catch(e:RuntimeException) { wo().scope.launch { wo().graph().repo.log("L002_FGS_START_REJECTED") };stopSelf();return }
+        catch(e:RuntimeException) { wo().diagnostics.record("前台服务权限",e);stopSelf();return }
         getSystemService(NotificationManager::class.java).cancel(102)
         thread=HandlerThread("wo-sensors").apply { start() };handler=Handler(thread.looper)
-        wo().scope.launch { val g=wo().graph();if(!g.repo.cachedPolicy.requested||g.repo.cachedPolicy.paused) { stopSelf();return@launch };handler.post { register(steps);adjust();audit() };WorkScheduling.schedule(this@RecordingService) }
+        wo().scope.launch { recoverableTask { val g=wo().graph();if(!g.repo.cachedPolicy.requested||g.repo.cachedPolicy.paused) { stopSelf();return@recoverableTask };handler.post { guardedSensors { register(steps);adjust();audit() } };WorkScheduling.schedule(this@RecordingService) }.onFailure { wo().diagnostics.record("恢复记录服务",it);stopSelf() } }
     }
+    private fun guardedSensors(action:()->Unit) { recoverableCall(action).onFailure { wo().diagnostics.record("传感器运行",it);stopSelf() } }
     override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int=START_STICKY
     override fun onBind(intent:Intent?):IBinder?=null
     private fun register(stepEnabled:Boolean) {
@@ -65,8 +70,9 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
     private fun resourceMode():String {
         val battery=getSystemService(BatteryManager::class.java);val power=getSystemService(PowerManager::class.java)
         val level=battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);val config=wo().currentGraph?.config ?: EngineConfig()
-        val candidate=if((level in 0..config.passiveBattery&&!battery.isCharging)||power.currentThermalStatus>=PowerManager.THERMAL_STATUS_SEVERE) "PASSIVE"
-        else if((level in 0..config.lowBattery&&!battery.isCharging)||power.isPowerSaveMode||power.currentThermalStatus>=PowerManager.THERMAL_STATUS_MODERATE) "ECONOMY" else "NORMAL"
+        val thermal=recoverableCall { power.currentThermalStatus }.getOrDefault(PowerManager.THERMAL_STATUS_SEVERE)
+        val candidate=if((level in 0..config.passiveBattery&&!battery.isCharging)||thermal>=PowerManager.THERMAL_STATUS_SEVERE) "PASSIVE"
+        else if((level in 0..config.lowBattery&&!battery.isCharging)||power.isPowerSaveMode||thermal>=PowerManager.THERMAL_STATUS_MODERATE) "ECONOMY" else "NORMAL"
         if(candidate!="NORMAL") { powerMode=candidate;recoverySince=0;return powerMode }
         if(powerMode!="NORMAL") {
             if(!battery.isCharging && level<=config.recoveryBattery) { recoverySince=0;return powerMode }
@@ -110,7 +116,7 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
             handler.postDelayed({ location.removeUpdates(gpsListener) },config.gnssBurstSeconds*1000L) } catch(e:SecurityException) { permissionLost() }
     }
     private fun permissionLost() { wo().scope.launch { val r=wo().graph().repo;r.state(r.source(Source.LOCATION).copy(authorization="DENIED",runtime="STOPPED",detail="P001:定位权限已撤回")) } }
-    override fun onLocationChanged(fix:Location) { onFix(fix) }
+    override fun onLocationChanged(fix:Location) { guardedSensors { onFix(fix) } }
     private fun onFix(fix:Location) {
         val g=wo().currentGraph ?: return;val now=System.currentTimeMillis()
         if(fix.latitude !in -90.0..90.0||fix.longitude !in -180.0..180.0||!fix.hasAccuracy()||fix.accuracy<=0||fix.time>now+300_000)return
@@ -130,9 +136,12 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
             quality=if(mock) listOf("MOCK_LOCATION") else emptyList(),payload=Payload(lat=fix.latitude,lon=fix.longitude,accuracyM=fix.accuracy.toDouble(),provider=fix.provider.orEmpty(),mock=mock)))
         adjust()
     }
-    override fun onProviderEnabled(provider:String) { adjust() }
-    override fun onProviderDisabled(provider:String) { positionMode="";adjust() }
+    override fun onProviderEnabled(provider:String) { guardedSensors { adjust() } }
+    override fun onProviderDisabled(provider:String) { guardedSensors { positionMode="";adjust() } }
     override fun onSensorChanged(event:SensorEvent) {
+        guardedSensors { acceptSteps(event) }
+    }
+    private fun acceptSteps(event:SensorEvent) {
         val now=System.currentTimeMillis();val boot=Settings.Global.getInt(contentResolver,Settings.Global.BOOT_COUNT,0).toString()
         val delta=baseline.update(event.values[0].toLong(),boot,now) ?: return
         if(delta.second<=0)return
@@ -154,9 +163,9 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
         val g=wo().currentGraph ?: return
         if(!g.repo.cachedPolicy.requested||g.repo.cachedPolicy.paused) { stopSelf();return }
         flushSteps();adjust();maybeGnss()
-        wo().scope.launch { g.collector.probe();g.repo.heartbeat() }
+        wo().scope.launch { recoverableTask { g.collector.probe();g.repo.heartbeat() }.onFailure { wo().diagnostics.record("来源检查",it) } }
         getSystemService(NotificationManager::class.java).notify(101,notification(this,if(resourceMode()=="NORMAL") "我正在整理今天" else "我正在低功耗整理今天",true))
-        handler.postDelayed({ audit() },300_000)
+        handler.postDelayed({ guardedSensors { audit() } },300_000)
     }
     override fun onDestroy() {
         if(::handler.isInitialized) { handler.removeCallbacksAndMessages(null);flushSteps();sensors.unregisterListener(this);sensors.getDefaultSensor(Sensor.TYPE_SIGNIFICANT_MOTION)?.let { sensors.cancelTriggerSensor(motion,it) };runCatching { location.removeUpdates(this);location.removeUpdates(gpsListener) };observer?.let { contentResolver.unregisterContentObserver(it) };thread.quitSafely() }

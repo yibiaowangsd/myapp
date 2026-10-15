@@ -11,6 +11,8 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.view.accessibility.AccessibilityEvent
 import com.personal.wo.wo
+import com.personal.wo.recoverableCall
+import com.personal.wo.recoverableTask
 import com.personal.wo.core.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.*
@@ -25,28 +27,34 @@ class NoticeListener : NotificationListenerService() {
     private var coverageJob:Job?=null
     private val noticeHashes=object:android.util.LruCache<String,String>(256){}
     private val listener=MediaSessionManager.OnActiveSessionsChangedListener { controllers -> syncMedia(controllers.orEmpty()) }
+    private fun listen(block:suspend CoroutineScope.()->Unit):Job = wo().scope.launch {
+        recoverableTask { block() }.onFailure { wo().diagnostics.record("通知与媒体监听",it) }
+    }
     override fun onListenerConnected() {
         connectedAt=System.currentTimeMillis()
-        wo().scope.launch { val g=wo().graph();g.repo.state(g.repo.source(Source.NOTIFICATION).copy(runtime="RUNNING")) }
-        coverageJob?.cancel();coverageJob=wo().scope.launch {
+        listen { val g=wo().graph();g.repo.state(g.repo.source(Source.NOTIFICATION).copy(runtime="RUNNING")) }
+        coverageJob?.cancel();coverageJob=listen {
             val r=wo().graph().repo;var previous=System.currentTimeMillis()
             while(isActive) { delay(300_000);val now=System.currentTimeMillis();val p=r.cachedPolicy
                 if(p.requested&&!p.paused) { r.coverage(Source.NOTIFICATION,previous,now,true,"通知监听在线区间，不是完整消息获取率");r.coverage(Source.MEDIA,previous,now,true,"媒体会话观察在线区间") }
                 previous=now
             }
         }
-        sessionManager=getSystemService(MediaSessionManager::class.java)
-        runCatching {
+        recoverableCall {
+            sessionManager=getSystemService(MediaSessionManager::class.java)
             val component=ComponentName(this,NoticeListener::class.java)
             sessionManager?.addOnActiveSessionsChangedListener(listener,component,Handler(Looper.getMainLooper()))
             syncMedia(sessionManager?.getActiveSessions(component).orEmpty())
-        }
+        }.onFailure { wo().diagnostics.record("媒体会话连接",it) }
     }
     override fun onListenerDisconnected() {
         coverageJob?.cancel();coverageJob=null;closeMedia(); val end=System.currentTimeMillis()
-        wo().scope.launch { val r=wo().graph().repo;r.coverage(Source.NOTIFICATION,connectedAt,end,true,"通知监听连接区间，不是消息获取率");r.state(r.source(Source.NOTIFICATION).copy(runtime="ERROR",detail="监听断开，期间通知可能缺失")) }
+        listen { val r=wo().graph().repo;r.coverage(Source.NOTIFICATION,connectedAt,end,true,"通知监听连接区间，不是消息获取率");r.state(r.source(Source.NOTIFICATION).copy(runtime="ERROR",detail="监听断开，期间通知可能缺失")) }
     }
     override fun onNotificationPosted(sbn:StatusBarNotification) {
+        recoverableCall { recordNotice(sbn) }.onFailure { wo().diagnostics.record("通知元数据",it) }
+    }
+    private fun recordNotice(sbn:StatusBarNotification) {
         val graph=wo().currentGraph ?: return; val p=graph.repo.cachedPolicy
         if(!p.requested || p.paused || sbn.packageName==packageName || Source.NOTIFICATION !in p.enabledSources || sbn.packageName in p.excludedApps)return
         val n=sbn.notification
@@ -61,6 +69,9 @@ class NoticeListener : NotificationListenerService() {
     }
     override fun onNotificationRemoved(sbn:StatusBarNotification) { noticeHashes.remove(sbn.key) }
     private fun syncMedia(controllers:List<MediaController>) {
+        recoverableCall { updateMedia(controllers) }.onFailure { wo().diagnostics.record("媒体会话查询",it) }
+    }
+    private fun updateMedia(controllers:List<MediaController>) {
         val tokens=controllers.map { it.sessionToken }.toSet()
         media.keys.filter { it !in tokens }.toList().forEach { token -> val pair=media.remove(token)!!;emitMedia(pair.first,false);pair.first.unregisterCallback(pair.second) }
         controllers.filter { it.sessionToken !in media }.forEach { controller ->
@@ -72,7 +83,7 @@ class NoticeListener : NotificationListenerService() {
             controller.registerCallback(callback,Handler(Looper.getMainLooper()));media[controller.sessionToken]=controller to callback
             emitMedia(controller,controller.playbackState?.state==PlaybackState.STATE_PLAYING)
         }
-        if(watch==null)watch=wo().scope.launch {
+        if(watch?.isActive!=true)watch=listen {
             val g=wo().graph()
             g.repo.changes.map { g.repo.cachedPolicy.let { it.requested&&!it.paused&&Source.MEDIA in it.enabledSources } }.distinctUntilChanged().collect { enabled ->
                 withContext(Dispatchers.Main) { if(!enabled)playing.clear() else media.values.forEach { emitMedia(it.first,it.first.playbackState?.state==PlaybackState.STATE_PLAYING) } }
@@ -80,6 +91,9 @@ class NoticeListener : NotificationListenerService() {
         }
     }
     private fun emitMedia(controller:MediaController,isPlaying:Boolean) {
+        recoverableCall { recordMedia(controller,isPlaying) }.onFailure { wo().diagnostics.record("媒体元数据",it) }
+    }
+    private fun recordMedia(controller:MediaController,isPlaying:Boolean) {
         val g=wo().currentGraph ?: return;val p=g.repo.cachedPolicy
         if(!p.requested || p.paused || Source.MEDIA !in p.enabledSources) { playing.clear();return }
         val session=controller.packageName+":"+controller.sessionToken.hashCode()
@@ -88,7 +102,7 @@ class NoticeListener : NotificationListenerService() {
         val now=System.currentTimeMillis();val key=g.vault.sourceKey("media",session,now,isPlaying)
         g.offer(Observation(stableId(Source.MEDIA,key),Source.MEDIA,key,if(isPlaying) Kind.MEDIA_PLAY else Kind.MEDIA_PAUSE,now,payload=Payload(packageName=controller.packageName,sessionKey=session,label=controller.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.take(256).orEmpty())))
     }
-    private fun closeMedia() { media.values.forEach { (c,callback) -> emitMedia(c,false); c.unregisterCallback(callback) };media.clear();runCatching { sessionManager?.removeOnActiveSessionsChangedListener(listener) } }
+    private fun closeMedia() { media.values.forEach { (c,callback) -> recoverableCall { emitMedia(c,false);c.unregisterCallback(callback) } };media.clear();recoverableCall { sessionManager?.removeOnActiveSessionsChangedListener(listener) } }
     override fun onDestroy() { watch?.cancel();watch=null;coverageJob?.cancel();coverageJob=null;closeMedia();super.onDestroy() }
 }
 
