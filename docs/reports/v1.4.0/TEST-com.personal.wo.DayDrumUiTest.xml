@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.DayDrumUiTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-15T12:53:27.200Z" hostname="4d93ee73a0a1" time="9.704">
+  <properties/>
+  <testcase name="cylinderHasIntermediateDepthFrames" classname="com.personal.wo.DayDrumUiTest" time="7.403"/>
+  <testcase name="narrowDarkLargeTypeStillRotatesAndOpensStats" classname="com.personal.wo.DayDrumUiTest" time="0.559"/>
+  <testcase name="horizontalGestureAndTimeScrubbingOpenTheSelectedExperience" classname="com.personal.wo.DayDrumUiTest" time="0.46"/>
+  <testcase name="restoreAndNewRecordsPreserveTheExperienceBeingViewed" classname="com.personal.wo.DayDrumUiTest" time="0.392"/>
+  <testcase name="emptyDayOffersSetupWithoutInventingExperiences" classname="com.personal.wo.DayDrumUiTest" time="0.166"/>
+  <testcase name="landscapeKeepsTheExperienceAndTimeControlsVisible" classname="com.personal.wo.DayDrumUiTest" time="0.237"/>
+  <testcase name="statsPageKeepsChartsAndEpisodeDetailsReachable" classname="com.personal.wo.DayDrumUiTest" time="0.277"/>
+  <testcase name="homeHasOnlyTheDrumAndStatisticsIsAnExplicitAction" classname="com.personal.wo.DayDrumUiTest" time="0.209"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[[Robolectric] WARN: Android SDK 36 requires Java 21 (have Java 17). Tests won't be run on SDK 36 unless explicitly requested.
+]]></system-err>
+</testsuite>

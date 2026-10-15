@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.DirectPermissionPlanTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-15T12:53:36.968Z" hostname="4d93ee73a0a1" time="0.005">
+  <properties/>
+  <testcase name="activityPermissionCanRevealAVendorSensorHiddenBeforeGrant" classname="com.personal.wo.DirectPermissionPlanTest" time="0.004"/>
+  <testcase name="api31UsesHardwareActivityAndStorageWithoutHealthConnect" classname="com.personal.wo.DirectPermissionPlanTest" time="0.0"/>
+  <testcase name="specialPagesAreDeduplicatedAndDoNotLoopWhenGranted" classname="com.personal.wo.DirectPermissionPlanTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

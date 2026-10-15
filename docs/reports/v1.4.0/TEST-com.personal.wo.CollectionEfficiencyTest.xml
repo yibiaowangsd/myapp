@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.CollectionEfficiencyTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-15T12:53:36.909Z" hostname="4d93ee73a0a1" time="0.044">
+  <properties/>
+  <testcase name="turningOffBothSensorSourcesRequiresNoForegroundService" classname="com.personal.wo.CollectionEfficiencyTest" time="0.002"/>
+  <testcase name="failedOrCancelledPullDoesNotSuppressRetry" classname="com.personal.wo.CollectionEfficiencyTest" time="0.022"/>
+  <testcase name="permissionAndLocationChangesReconfigureOnlyTheNecessarySensors" classname="com.personal.wo.CollectionEfficiencyTest" time="0.0"/>
+  <testcase name="foregroundCanReadHealthDataImmediatelyAfterBackgroundWorker" classname="com.personal.wo.CollectionEfficiencyTest" time="0.001"/>
+  <testcase name="manualRefreshBypassesCooldownAndAutomaticPullResumesAfterExpiry" classname="com.personal.wo.CollectionEfficiencyTest" time="0.002"/>
+  <testcase name="disabledUnsupportedAndPausedSourcesNeverAppearActive" classname="com.personal.wo.CollectionEfficiencyTest" time="0.002"/>
+  <testcase name="calendarAndNoticeSelectionDoNotRestartSensors" classname="com.personal.wo.CollectionEfficiencyTest" time="0.001"/>
+  <testcase name="appStatusRequiresAuthorizationAndDoesNotClaimAccountConnection" classname="com.personal.wo.CollectionEfficiencyTest" time="0.0"/>
+  <testcase name="overlappingAutomaticPullsRunOnlyOnce" classname="com.personal.wo.CollectionEfficiencyTest" time="0.013"/>
+  <testcase name="notificationContentRequiresAppSelectionAndGlobalGrant" classname="com.personal.wo.CollectionEfficiencyTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

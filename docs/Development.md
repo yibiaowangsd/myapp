@@ -2,9 +2,11 @@
 
 文档更新：2026-10-15（Asia/Shanghai）
 
-对应应用版本：1.3.1；数据库版本：Room V1；包名：`com.personal.wo`。
+对应应用版本：1.4.0；数据库版本：Room V1；包名：`com.personal.wo`。
 
 本仓库包含 1.0.0 基础功能、1.0.1 启动异常处理、1.0.2 数据库打开回调修复、1.1.0界面重构、1.2.0直接授权/计步兼容/每日总结，以及1.3.0时间线首页/应用连接/采集提效。最新构建结果见 Verification.md，原 1.0.0 验证记录保存在 archive/v1.0.0/。修复范围和实际设备验证边界见 [HarmonyOS 启动修复说明](HarmonyOS_4.2.0_Startup_Fix.md)。
+
+新增1.4.0转筒时间线：`DayMoments.kt`负责真实片段的展示投影；`DayDrumUi.kt`使用原生Compose Pager和graphicsLayer连续旋转、缩放、透明度与圆弧位移。统计移至独立页面。实现说明与边界见[1.4.0](Drum_Home_1.4.0.md)。
 
 ## 1. 阅读入口
 
@@ -125,7 +127,7 @@ python3 scripts/verify_pragmas.py
 
 Debug 支持 arm64-v8a 和 x86_64。标准 APK 输出在 `app/build/outputs/apk/<flavor>/<buildType>/`；本地单元测试报告在 `core/build/test-results/test/`；Lint 报告在 `app/build/reports/`。
 
-当前包含事件引擎、流式加密、应用时长口径、每日回顾、硬件计步事件、系统权限计划、传感器注册回退、启动恢复、数据库回调和原生UI流程测试。最终测试数量与通过状态见Verification.md。UI测试覆盖点击即请求、统一申请入口、照片不可访问、计步重连、小屏大字体、深色、时间线和日期选择。AndroidTest 4项只编译，尚未在设备执行；本次报告保存在docs/reports/v1.3.1/。
+当前包含事件引擎、流式加密、应用时长口径、每日回顾、硬件计步事件、系统权限计划、传感器注册回退、启动恢复、数据库回调和原生UI流程测试。最终测试数量与通过状态见Verification.md。UI测试覆盖点击即请求、统一申请入口、照片不可访问、计步重连、小屏大字体、深色、时间线和日期选择。AndroidTest 4项只编译，尚未在设备执行；本次报告保存在docs/reports/v1.4.0/。
 
 ## 7. Release 与升级签名
 
@@ -147,7 +149,7 @@ Release 只包含 arm64-v8a，启用 R8 和资源压缩。使用个人签名备�
 静态检查脚本需要 APK 路径和 Android SDK 路径：
 
 ```bash
-python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.3.1_Offline.apk /absolute/path/android-sdk
+python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.4.0_Offline.apk /absolute/path/android-sdk
 ```
 
 脚本检查签名、min/targetSdk、离线 INTERNET 移除、APK zipalign 以及原生 ELF 16 KiB 对齐。它不能替代 16 KiB Android 设备上的运行验证。离线 APK 文件名应含 `Offline` 或 `personalOffline`，因为脚本据此选择网络权限断言。
@@ -205,7 +207,7 @@ python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.3.1_Offline.apk /abs
 
 `docs/Source_SHA256.json` 记录除自身外的仓库交付文件 SHA-256，用于比对来源。更新文件后重新生成清单，保留原始设计和历史验证时间；新增验证应明确实际执行日期和环境。
 
-仓库不包含安装包、原始生活数据、恢复码、签名私钥、API 密钥或本机 SDK 配置。个人签名备份需由本人另行保管。1.3.1 提升 versionCode 到 7，复用原 Release 签名与数据库结构，可覆盖升级。
+仓库不包含安装包、原始生活数据、恢复码、签名私钥、API 密钥或本机 SDK 配置。个人签名备份需由本人另行保管。1.4.0 提升 versionCode 到 8，复用原 Release 签名与数据库结构，可覆盖升级。
 
 ## 12. 启动兼容约束
 
@@ -253,7 +255,9 @@ DatabaseOpenCallbackTest 使用严格的数据库接口替身测试生产回调�
 构建环境提示：本轮增量构建遇到一次Lint的Kotlin分析器引用另一个变体KAPT临时stub、而该文件正在重新生成的FileNotFoundException。将最终测试/Lint/Release命令加上 `--max-workers=1 --no-parallel` 串行执行，保留所有检查，不关闭Lint。该问题属于构建工具并发，不是设备运行诊断。
 
 
-## 1.3.1 图文首页与日图表
+## 历史：1.3.1 图文首页与日图表
+
+以下保留上一版实现说明，默认路由已由1.4.0替换。
 
 - `AppUi.kt`：默认 tab 0 直接调用 `TodayDashboard`；“全部片段”打开 `day` 路由，详情返回保存父路由，首页底栏名为“今天”。保留旧 summary 路由以兼容状态恢复。
 - `DailyRecapUi.kt`：先显示 `recapParts`，再显示统计与图表。两列照片默认取前两项，展开访问全部；`rememberSaveable(part.startMs)` 保留展开状态，时段标题用 FlowRow 适应大字体；时间线连接线根据卡片实际高度绘制。
@@ -261,3 +265,14 @@ DatabaseOpenCallbackTest 使用严格的数据库接口替身测试生产回调�
 - `UiFlowTest`：默认首页顺序、完整片段入口、影像展开与点击、小时图总量及选择、无数据图表、360dp/1.5倍字体深色。其余连接与权限测试保持。
 
 最终发布检查使用 `--max-workers=1 --no-parallel` 串行执行双变体 Lint、单元测试和签名构建，避免不同 flavor 的 KAPT stub 在 Lint 读取期间重建；不关闭 Lint 门禁。签名、Room V1、应用 ID 保持原有值，安装包 versionName 1.3.1 / versionCode 7。
+
+## 1.4.0 转筒首页
+
+- `core/DayMoments.kt`：按实际片段和截止时间建立展示序列；步数在区间结束出现一次；按归档时区定位。原始Episode不变。
+- `ui/DayDrumUi.kt`：Pager连续手势、圆弧坐标、Y轴旋转、缩放、透明度；稳定ID与最新快照避免刷新导致越界。时间轴选择最近真实片段，没有插入模拟事件或自动播放。
+- `AppUi.kt`：tab 0调用DayDrumHome，summary路由调用DayStatisticsPage。独立的dayParent使统计→全部片段→详情能按层返回；保存的首页状态保留正在查看的位置。
+- DayMomentsTest检查日界/asOf、未来与计划过滤、步数只出现一次、时间轴缺口；DayDrumUiTest检查滑动、时间选择、详情、统计入口、状态恢复、记录增减、空态、大字体深色、横屏与连续透视帧。
+- 生产组件渲染位于`docs/ui/v1.4.0/`；22–29为新增转筒/统计检查，其余为继承组件检查，其中旧分时段回顾不再是默认首页。
+- 实现沿用固定Compose版本，不新增3D引擎、权限或后台任务。图片沿用原缩略图缓存。实际手势帧率与OEM耗电需真机测量。
+
+官方API参考：[Pager](https://developer.android.com/develop/ui/compose/layouts/pager)、[graphicsLayer](https://developer.android.com/develop/ui/compose/graphics/draw/modifiers)。
