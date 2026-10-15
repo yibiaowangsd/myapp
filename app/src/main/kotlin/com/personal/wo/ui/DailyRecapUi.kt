@@ -14,12 +14,16 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.personal.wo.core.*
 import kotlinx.coroutines.Dispatchers
@@ -35,9 +39,9 @@ import java.util.Locale
     LazyColumn(Modifier.testTag("today-list"),verticalArrangement=Arrangement.spacedBy(16.dp),contentPadding=PaddingValues(top=8.dp,bottom=28.dp)) {
         item {
             Row(verticalAlignment=Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("${date.monthValue}月${date.dayOfMonth}日 · 星期${listOf("一","二","三","四","五","六","日")[date.dayOfWeek.value-1]}",style=MaterialTheme.typography.titleMedium)
-                    Muted("截至 ${clock(day.asOfMs,day.zoneId)}")
+                FlowRow(Modifier.weight(1f),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                    Text("${date.monthValue}月${date.dayOfMonth}日",style=MaterialTheme.typography.titleMedium)
+                    Text("星期${listOf("一","二","三","四","五","六","日")[date.dayOfWeek.value-1]}",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 StatusPill(if(s.demo)"演示数据" else if(s.policy.paused)"已暂停" else if(s.policy.requested)"记录中" else "未开始")
                 IconButton(onClick=refresh,enabled=!s.busy){Icon(Icons.Outlined.Refresh,"更新今天")}
@@ -51,8 +55,28 @@ import java.util.Locale
                 }
             }
         }
-        item { DailyRecapHero(day) }
+        item { Section("按时间回看","全部片段",detail) }
+        if(parts.isEmpty())item {
+            Paper {
+                IconTile(Icons.Outlined.AutoAwesome,size=44)
+                Text("第一段生活，即将出现",style=MaterialTheme.typography.titleLarge)
+                Muted("正常使用手机后，这里会按上午、下午和晚上，自动整理地点、活动与照片。")
+                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick=setup){Text("查看记录权限")}
+                    TextButton(onClick={demo(true)}){Text("看看示例")}
+                }
+            }
+        }
+        itemsIndexed(parts,key={_,part->"part-${part.label}"}) { index,part ->
+            RecapTimelineCard(part,day.zoneId,last=index==parts.lastIndex,onEpisode=episode)
+        }
+        item {
+            Section("一天的数据")
+            Muted("截至 ${clock(day.asOfMs,day.zoneId)} · 根据已有记录整理",Modifier.padding(bottom=4.dp))
+        }
         item { DayStatistics(day,connectSteps,detail) }
+        item { DayUsageChart(day) }
+        if(appPeriods(day).isNotEmpty())item { AppPeriodsCard(day,episode,detail) }
         if(!s.demo) {
             val step=s.sources.firstOrNull{it.source==Source.STEPS}
             val stepsKnown=day.metrics.firstOrNull{it.key=="steps"}?.value!=null
@@ -68,23 +92,6 @@ import java.util.Locale
                     }
                 }
             }
-        }
-        item { Section("这一天，按时间回看","全部片段",detail) }
-        if(parts.isEmpty())item {
-            Paper {
-                IconTile(Icons.Outlined.AutoAwesome,size=44)
-                Text("第一段生活，即将出现",style=MaterialTheme.typography.titleLarge)
-                Muted("正常使用手机后，这里会按上午、下午和晚上，自动整理地点、活动与照片。")
-                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick=setup){Text("查看记录权限")}
-                    TextButton(onClick={demo(true)}){Text("看看示例")}
-                }
-            }
-        }
-        items(parts,key={"part-${it.label}"}) { part -> RecapTimelineCard(part,day.zoneId,episode) }
-        if(appPeriods(day).isNotEmpty())item {
-            Section("应用使用时段")
-            AppPeriodsCard(day,episode,detail)
         }
         if(!s.demo)item {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
@@ -125,15 +132,24 @@ import java.util.Locale
     val locations=observed.filter{it.kind=="STAY"}
     val periods=appPeriods(day)
     val appKnown=day.metrics.firstOrNull{it.key=="appMs"}?.value!=null||periods.isNotEmpty()
+    val appValue=if(appKnown)durationText(union(periods.map{Span(it.startMs,it.endMs)}).sumOf{it.duration}) else "—"
+    val stepText=stepValue?.let{String.format(Locale.CHINA,"%,d",it)} ?: "—"
+    val placeText=if(locations.isEmpty())"—" else locations.size.toString()
     Column(verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-            StatCell("今日步数",stepValue?.let{String.format(Locale.CHINA,"%,d",it)} ?: "—","步",Icons.Outlined.DirectionsWalk,laneTint(Lane.ACTIVITY),Modifier.weight(1f),steps)
-            StatCell("停留记录",if(locations.isEmpty())"—" else locations.size.toString(),"段",Icons.Outlined.Place,laneTint(Lane.PLACE),Modifier.weight(1f),detail)
-        }
-        Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-            StatCell("照片与视频",photoValue?.toString() ?: "—","项",Icons.Outlined.PhotoLibrary,laneTint(Lane.LIFE),Modifier.weight(1f),detail)
-            val value=if(appKnown)durationText(union(periods.map{Span(it.startMs,it.endMs)}).sumOf{it.duration}) else "—"
-            StatCell("手机使用",value,"",Icons.Outlined.Smartphone,laneTint(Lane.DIGITAL),Modifier.weight(1f),detail)
+        if(LocalDensity.current.fontScale>=1.3f) {
+            StatCell("今日步数",stepText,"步",Icons.Outlined.DirectionsWalk,laneTint(Lane.ACTIVITY),Modifier.fillMaxWidth(),steps)
+            StatCell("停留记录",placeText,"段",Icons.Outlined.Place,laneTint(Lane.PLACE),Modifier.fillMaxWidth(),detail)
+            StatCell("照片与视频",photoValue?.toString() ?: "—","项",Icons.Outlined.PhotoLibrary,laneTint(Lane.LIFE),Modifier.fillMaxWidth(),detail)
+            StatCell("手机使用",appValue,"",Icons.Outlined.Smartphone,laneTint(Lane.DIGITAL),Modifier.fillMaxWidth(),detail)
+        } else {
+            Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                StatCell("今日步数",stepText,"步",Icons.Outlined.DirectionsWalk,laneTint(Lane.ACTIVITY),Modifier.weight(1f),steps)
+                StatCell("停留记录",placeText,"段",Icons.Outlined.Place,laneTint(Lane.PLACE),Modifier.weight(1f),detail)
+            }
+            Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                StatCell("照片与视频",photoValue?.toString() ?: "—","项",Icons.Outlined.PhotoLibrary,laneTint(Lane.LIFE),Modifier.weight(1f),detail)
+                StatCell("手机使用",appValue,"",Icons.Outlined.Smartphone,laneTint(Lane.DIGITAL),Modifier.weight(1f),detail)
+            }
         }
     }
 }
@@ -156,43 +172,78 @@ fun episodeIcon(e:Episode):ImageVector=when(e.kind) {
     "CALENDAR"->Icons.Outlined.Event;"NOTICE"->Icons.Outlined.NotificationsNone;else->Icons.Outlined.Smartphone
 }
 
-@Composable fun RecapTimelineCard(part:RecapPart,zone:String,onEpisode:(Episode)->Unit) {
+@Composable fun RecapTimelineCard(part:RecapPart,zone:String,last:Boolean=false,onEpisode:(Episode)->Unit) {
     val photos=part.episodes.filter{it.photoUris.isNotEmpty()}.distinctBy{it.id}
     val chosen=part.episodes.filter{it.kind !in setOf("APP","STEPS","PHOTO","NOTICE")}.distinctBy{it.title}.take(3)
-    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-        Column(Modifier.width(40.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+    val apps=part.episodes.filter{it.kind=="APP"}.distinctBy{it.packageName.ifBlank{it.title}}
+    val tint=partTint(part.label)
+    val line=MaterialTheme.colorScheme.outlineVariant
+    var expanded by rememberSaveable(part.startMs){mutableStateOf(false)}
+    Row(Modifier.fillMaxWidth().testTag("recap-${part.label}").drawBehind {
+        if(!last)drawLine(line,Offset(18.dp.toPx(),46.dp.toPx()),Offset(18.dp.toPx(),size.height+16.dp.toPx()),1.dp.toPx())
+    },horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.width(36.dp).padding(top=4.dp),horizontalAlignment=Alignment.CenterHorizontally) {
             val icon=when(part.label){"凌晨"->Icons.Outlined.Bedtime;"上午"->Icons.Outlined.WbSunny;"下午"->Icons.Outlined.LightMode;else->Icons.Outlined.DarkMode}
-            IconTile(icon,MaterialTheme.colorScheme.primary,36)
-            Box(Modifier.padding(top=10.dp).width(2.dp).height(62.dp).background(MaterialTheme.colorScheme.outlineVariant))
+            IconTile(icon,tint,36)
         }
-        Surface(Modifier.weight(1f),shape=RoundedCornerShape(22.dp),color=MaterialTheme.colorScheme.surface) {
+        Surface(Modifier.weight(1f),shape=RoundedCornerShape(24.dp),color=MaterialTheme.colorScheme.surface,
+            border=BorderStroke(1.dp,line.copy(alpha=.35f))) {
             Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment=Alignment.CenterVertically) {
-                    Text(part.label,Modifier.weight(1f),style=MaterialTheme.typography.titleLarge)
-                    Text("${clock(part.startMs,zone)}–${if(part.label=="晚上"&&part.endMs-part.startMs>=6*3_600_000)"24:00" else clock(part.endMs,zone)}",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                    Text(part.label,style=MaterialTheme.typography.titleLarge,color=tint)
+                    Surface(Modifier.align(Alignment.CenterVertically),shape=CircleShape,color=tint.copy(alpha=.08f)) {
+                        Text("${clock(part.startMs,zone)}–${if(part.label=="晚上"&&part.endMs-part.startMs>=6*3_600_000)"24:00" else clock(part.endMs,zone)}",Modifier.padding(horizontal=9.dp,vertical=4.dp),style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-                Text(recapPartText(part),style=MaterialTheme.typography.bodyLarge,lineHeight=25.sp)
+                Text(recapPartText(part),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(photos.isNotEmpty()) {
+                    val visible=if(expanded)photos else photos.take(2)
+                    visible.chunked(2).forEach { pair ->
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            pair.forEach { photo ->
+                                Column(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(onClickLabel="查看 ${clock(photo.startMs,zone)} 的影像"){onEpisode(photo)},verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                                    PhotoThumbnail(photo.photoUris.first(),Modifier.fillMaxWidth().aspectRatio(if(photos.size==1)1.5f else 1f),crop=true)
+                                    Row(horizontalArrangement=Arrangement.spacedBy(4.dp),verticalAlignment=Alignment.CenterVertically) {
+                                        Icon(Icons.Outlined.PhotoCamera,null,Modifier.size(12.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(clock(photo.startMs,zone),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                            if(pair.size==1&&photos.size>1)Spacer(Modifier.weight(1f))
+                        }
+                    }
+                    if(photos.size>2)TextButton(onClick={expanded=!expanded},modifier=Modifier.fillMaxWidth()) {
+                        Text(if(expanded)"收起影像" else "展开全部 ${photos.size} 项影像")
+                        Icon(if(expanded)Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,null,Modifier.size(18.dp))
+                    }
+                }
                 chosen.forEach { e ->
-                    Row(Modifier.fillMaxWidth().clickable{onEpisode(e)}.padding(vertical=2.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth().heightIn(min=48.dp).clickable{onEpisode(e)}.padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                         Icon(episodeIcon(e),null,Modifier.size(18.dp),tint=laneTint(e.lane))
                         Text(e.title.removeSuffix("附近停留"),Modifier.weight(1f),style=MaterialTheme.typography.labelLarge)
                         Text(clock(maxOf(e.startMs,part.startMs),zone),style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if(photos.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                        photos.take(3).forEach { photo ->
-                            Column(Modifier.weight(1f).clickable{onEpisode(photo)},verticalArrangement=Arrangement.spacedBy(5.dp)) {
-                                PhotoThumbnail(photo.photoUris.first(),Modifier.fillMaxWidth().aspectRatio(if(photos.size==1)1.5f else 1f),crop=true)
-                                Text(clock(photo.startMs,zone),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(apps.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                        apps.forEach { app ->
+                            Column(Modifier.width(52.dp).clip(RoundedCornerShape(10.dp)).clickable{onEpisode(app)}.padding(vertical=4.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(5.dp)) {
+                                AppBadge(app.packageName,app.title,Modifier.size(32.dp))
+                                Text(app.title,maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
-                    if(photos.size>3)Text("这一时段共 ${photos.size} 项影像",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
     }
+}
+
+@Composable internal fun partTint(label:String):Color=when(label) {
+    "上午"->laneTint(Lane.ACTIVITY)
+    "下午"->laneTint(Lane.PLACE)
+    "晚上"->laneTint(Lane.LIFE)
+    else->MaterialTheme.colorScheme.primary
 }
 
 private val appIconCache=LruCache<String,Bitmap>(48)

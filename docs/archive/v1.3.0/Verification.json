@@ -1,0 +1,147 @@
+{
+  "date": "2026-10-15T15:33:11.423299+08:00",
+  "version": "1.3.0",
+  "versionCode": 6,
+  "package": "com.personal.wo",
+  "databaseVersion": 1,
+  "build": "PASS",
+  "buildExitCode": 0,
+  "tests": [
+    {
+      "name": "com.personal.wo.core.DailyRecapTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T07:28:55.310Z"
+    },
+    {
+      "name": "com.personal.wo.core.DayPresentationTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T07:28:55.375Z"
+    },
+    {
+      "name": "com.personal.wo.core.EngineTest",
+      "tests": "33",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T07:28:55.391Z"
+    },
+    {
+      "name": "com.personal.wo.core.StepReadingsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T07:28:55.453Z"
+    },
+    {
+      "name": "com.personal.wo.core.StreamingCryptoTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T07:28:55.455Z"
+    },
+    {
+      "name": "com.personal.wo.CollectionEfficiencyTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T07:28:57.781Z"
+    },
+    {
+      "name": "com.personal.wo.DatabaseOpenCallbackTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T07:28:57.874Z"
+    },
+    {
+      "name": "com.personal.wo.DirectPermissionPlanTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T07:28:57.889Z"
+    },
+    {
+      "name": "com.personal.wo.StartupRecoveryTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T07:28:57.895Z"
+    },
+    {
+      "name": "com.personal.wo.StepSensorsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T07:28:57.907Z"
+    },
+    {
+      "name": "com.personal.wo.UiFlowTest",
+      "tests": "14",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T07:28:58.316Z"
+    }
+  ],
+  "testCount": 91,
+  "lintErrors": 0,
+  "uiRendering": "Robolectric API 35 native graphics; production Compose components; Android View.draw/Skia",
+  "uiImages": [
+    "01-permissions.png",
+    "02-photo-timeline.png",
+    "03-today.png",
+    "04-visuals.png",
+    "05-empty.png",
+    "06-large-text.png",
+    "07-dark.png",
+    "08-timeline.png",
+    "09-history.png",
+    "10-me.png",
+    "11-step-retry.png",
+    "12-timeline-home.png",
+    "13-connections.png",
+    "14-app-connection.png",
+    "15-huawei-status.png",
+    "16-background-help.png",
+    "17-connections-large-dark.png"
+  ],
+  "smallScreen": {
+    "widthDp": 360,
+    "heightDp": 800,
+    "fontScale": 1.5
+  },
+  "androidInstrumentation": "4 tests compiled; not run on device",
+  "huaweiPermissionScreens": "NOT_DEVICE_TESTED",
+  "apks": [
+    {
+      "apk": "Wo_Android_v1.3.0_Offline.apk",
+      "sha256": "707502ef723f0e1148e594922be301a86e054f36655da53ebe1e729ee38d5574",
+      "sizeBytes": 9013589,
+      "hasInternet": false,
+      "staticChecks": "PASS"
+    },
+    {
+      "apk": "Wo_Android_v1.3.0_Enhanced.apk",
+      "sha256": "d03679dd8dcd0d0222bb81e6979cd914d9ea4954efd6f9399e1999821f44319b",
+      "sizeBytes": 9095533,
+      "hasInternet": true,
+      "staticChecks": "PASS"
+    }
+  ],
+  "r8MappingVerified": true,
+  "previousStartupFix": "DatabaseOpenCallback query + consumed and closed cursor retained",
+  "signatureContinuity": true
+}

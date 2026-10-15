@@ -1,0 +1,27 @@
+{
+  "renderer": "Robolectric API 35 native graphics; production Compose components; Android View.draw/Skia",
+  "images": [
+    "01-permissions.png",
+    "02-photo-timeline.png",
+    "03-today.png",
+    "04-visuals.png",
+    "05-empty.png",
+    "06-large-text.png",
+    "07-dark.png",
+    "08-timeline.png",
+    "09-history.png",
+    "10-me.png",
+    "11-step-retry.png",
+    "12-timeline-home.png",
+    "13-connections.png",
+    "14-app-connection.png",
+    "15-huawei-status.png",
+    "16-background-help.png",
+    "17-connections-large-dark.png",
+    "18-day-chart.png",
+    "19-hour-detail.png",
+    "20-recap-large-dark.png",
+    "21-chart-large-dark.png"
+  ],
+  "scope": "Components, controlled state and interactions; no real device/system settings"
+}

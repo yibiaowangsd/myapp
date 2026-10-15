@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.UiFlowTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-10-15T08:55:41.932Z" hostname="4d93ee73a0a1" time="12.005">
+  <properties/>
+  <testcase name="connectionControlsRemainAccessibleWithLargeTextAndDarkTheme" classname="com.personal.wo.UiFlowTest" time="6.704"/>
+  <testcase name="sourcePageDisclosesHuaweiAccountNotConnectedAndShowsBackgroundHelp" classname="com.personal.wo.UiFlowTest" time="0.567"/>
+  <testcase name="stepConnectionFailureOffersRetryWithoutHealthConnect" classname="com.personal.wo.UiFlowTest" time="0.478"/>
+  <testcase name="timelineFiltersAndOpensAnEpisode" classname="com.personal.wo.UiFlowTest" time="0.305"/>
+  <testcase name="narrowScreenAndLargeTextKeepSetupAccessible" classname="com.personal.wo.UiFlowTest" time="0.216"/>
+  <testcase name="hourlyChartShowsUnionTotalAndSelectedHourAndNoInventedData" classname="com.personal.wo.UiFlowTest" time="0.246"/>
+  <testcase name="mePageKeepsPermissionsAndPrivacyReachable" classname="com.personal.wo.UiFlowTest" time="0.315"/>
+  <testcase name="photosStayInTheirTimePartAndCanOpenEvenWhenFileIsUnavailable" classname="com.personal.wo.UiFlowTest" time="0.196"/>
+  <testcase name="emptyDashboardOffersSetupAndDoesNotInventMeasurements" classname="com.personal.wo.UiFlowTest" time="0.231"/>
+  <testcase name="chartWithoutUsagePermissionDoesNotRenderZeroBars" classname="com.personal.wo.UiFlowTest" time="0.08"/>
+  <testcase name="connectionSelectionUsesInstalledAppsAndRequestsSystemAccessDirectly" classname="com.personal.wo.UiFlowTest" time="0.448"/>
+  <testcase name="homeOpensPhotoRecapBeforeStatisticsAndKeepsAllFragmentsReachable" classname="com.personal.wo.UiFlowTest" time="0.328"/>
+  <testcase name="photoGroupsExpandWithoutDroppingHiddenImages" classname="com.personal.wo.UiFlowTest" time="0.143"/>
+  <testcase name="recapAndChartsRemainUsableWithLargeTextInDarkMode" classname="com.personal.wo.UiFlowTest" time="0.394"/>
+  <testcase name="dashboardShowsActualDataAndScrollableVisuals" classname="com.personal.wo.UiFlowTest" time="0.643"/>
+  <testcase name="historyCalendarOpensSelectedDate" classname="com.personal.wo.UiFlowTest" time="0.313"/>
+  <testcase name="permissionsOpenSystemDirectlyAndOfferOneBatchAction" classname="com.personal.wo.UiFlowTest" time="0.196"/>
+  <testcase name="darkDashboardRendersAndExitsDemo" classname="com.personal.wo.UiFlowTest" time="0.2"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[[Robolectric] WARN: Android SDK 36 requires Java 21 (have Java 17). Tests won't be run on SDK 36 unless explicitly requested.
+]]></system-err>
+</testsuite>

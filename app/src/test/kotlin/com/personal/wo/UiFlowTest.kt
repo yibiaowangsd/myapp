@@ -64,9 +64,12 @@ class UiFlowTest {
                 }
             }
         } }
-        compose.onNodeWithText("今日回顾").assertIsDisplayed()
-        compose.onNodeWithText("4,280 步").assertExists()
+        compose.onNodeWithText("按时间回看").assertIsDisplayed()
+        compose.onNodeWithText("上午",substring=false).assertIsDisplayed()
+        compose.onNodeWithText("一天的数据").assertIsNotDisplayed()
         capture("03-today")
+        compose.onNodeWithTag("today-list").performScrollToNode(hasTestTag("day-usage-chart"))
+        capture("18-day-chart")
         compose.onNodeWithTag("today-list").performScrollToNode(hasText("什么时候，打开了什么"))
         capture("04-visuals")
         compose.onNodeWithTag("today-list").performScrollToNode(hasText("办公室"))
@@ -117,6 +120,7 @@ class UiFlowTest {
         val part=recapParts(d.copy(episodes=listOf(photo))).single()
         compose.setContent { WoTheme(dark=false) { RecapTimelineCard(part,d.zoneId){selected=it} } }
         compose.onNodeWithText("下午").assertIsDisplayed()
+        compose.waitUntil(timeoutMillis=5000) { compose.onAllNodesWithText("照片暂不可访问").fetchSemanticsNodes().size==1 }
         compose.onNodeWithText("照片暂不可访问").performClick()
         assertEquals("test-photo",selected?.id)
         capture("02-photo-timeline")
@@ -146,20 +150,76 @@ class UiFlowTest {
         compose.onNodeWithText("数据与隐私").performClick()
         assertTrue(permissions && privacy)
     }
-    @Test fun homeOpensTimelineWithSummaryOneTapAway() {
-        var summary=false
+    @Test @Config(qualifiers="zh-rCN-w360dp-h812dp-xhdpi")
+    fun homeOpensPhotoRecapBeforeStatisticsAndKeepsAllFragmentsReachable() {
+        var all=false
+        val d=state().day!!
+        fun photo(id:String,minute:Int)=Episode(id,startMs=d.windowStartMs+minute*60_000L,endMs=d.windowStartMs+minute*60_000L,
+            lane=Lane.LIFE,kind="PHOTO",title="测试影像",assertion=Assertion.RECORDED,photoUris=listOf("content://missing/$id"))
+        val entries=listOf(d.episodes.first{it.kind=="APP"}.copy(startMs=d.windowStartMs+60_000,endMs=d.windowStartMs+180_000),photo("one",559),photo("two",587),photo("three",736),photo("four",965))
+        val s=state().copy(demo=false,day=d.copy(episodes=entries,asOfMs=d.windowStartMs+993*60_000L))
         compose.setContent { WoTheme(dark=false) {
             Scaffold(bottomBar={AppNavigation(0){}}) { padding ->
-                Box(Modifier.fillMaxSize().padding(padding).padding(horizontal=16.dp)) {
-                    TodayTimeline(state(),{},{},{summary=true},{},{},{})
+                Column(Modifier.fillMaxSize().padding(padding).padding(horizontal=16.dp)) {
+                    Text("今天",Modifier.padding(vertical=16.dp),style=MaterialTheme.typography.titleLarge)
+                    TodayDashboard(s,{all=true},{},{},{},{},{})
                 }
             }
         } }
-        compose.onNodeWithTag("timeline-home").assertIsDisplayed()
-        compose.onNodeWithText("今日回顾").assertDoesNotExist()
-        compose.onNodeWithText("一天总结").assertIsDisplayed().performClick()
-        assertTrue(summary)
+        compose.onNodeWithTag("recap-凌晨").assertIsDisplayed()
+        compose.onNodeWithTag("recap-上午").assertIsDisplayed()
+        compose.onNodeWithText("一天的数据").assertIsNotDisplayed()
+        compose.onNodeWithText("全部片段").performClick()
+        assertTrue(all)
         capture("12-timeline-home")
+    }
+    @Test fun photoGroupsExpandWithoutDroppingHiddenImages() {
+        var opened=""
+        val d=state().day!!
+        val photos=(0..4).map { i->Episode("photo-$i",startMs=d.windowStartMs+(540+i)*60_000L,endMs=d.windowStartMs+(540+i)*60_000L,
+            lane=Lane.LIFE,kind="PHOTO",title="测试照片 $i",assertion=Assertion.RECORDED,photoUris=listOf("content://missing/expand-$i")) }
+        compose.setContent { WoTheme(dark=false) {
+            androidx.compose.foundation.lazy.LazyColumn { item { RecapTimelineCard(recapParts(d.copy(episodes=photos)).single(),d.zoneId){opened=it.id} } }
+        } }
+        compose.onNodeWithText("09:04").assertDoesNotExist()
+        compose.onNodeWithText("展开全部 5 项影像").performClick()
+        compose.onNodeWithText("09:04").performScrollTo().performClick()
+        assertEquals("photo-4",opened)
+        compose.onNodeWithText("收起影像").performScrollTo().performClick()
+        compose.onNodeWithText("09:04").assertDoesNotExist()
+    }
+    @Test fun hourlyChartShowsUnionTotalAndSelectedHourAndNoInventedData() {
+        val d=state().day!!
+        compose.setContent { WoTheme(dark=false) { Surface { DayUsageChart(d) } } }
+        compose.onNodeWithText("2小时5分钟").assertIsDisplayed()
+        compose.onNodeWithContentDescription("前一小时").performClick()
+        compose.onNodeWithTag("hour-selection").assertTextContains("09:00–10:00 · 30分钟")
+        compose.onNodeWithContentDescription("后一小时").performClick()
+        compose.onNodeWithTag("hour-selection").assertTextContains("10:00–11:00 · 40分钟")
+        capture("19-hour-detail")
+    }
+    @Test fun chartWithoutUsagePermissionDoesNotRenderZeroBars() {
+        val d=state().day!!.copy(metrics=emptyList(),episodes=emptyList())
+        compose.setContent { WoTheme(dark=false) { DayUsageChart(d) } }
+        compose.onNodeWithText("—").assertIsDisplayed()
+        compose.onNodeWithTag("hour-chart").assertDoesNotExist()
+    }
+    @Test @Config(qualifiers="zh-rCN-w360dp-h800dp-xhdpi")
+    fun recapAndChartsRemainUsableWithLargeTextInDarkMode() {
+        compose.setContent {
+            val density=LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density,1.5f)) {
+                WoTheme(dark=true) { Surface(color=MaterialTheme.colorScheme.background) {
+                    Box(Modifier.padding(horizontal=16.dp)) { TodayDashboard(state(),{},{},{},{},{},{}) }
+                } }
+            }
+        }
+        compose.onNodeWithText("全部片段").assertIsDisplayed()
+        capture("20-recap-large-dark")
+        compose.onNodeWithTag("today-list").performScrollToNode(hasTestTag("day-usage-chart"))
+        compose.onNodeWithTag("today-list").performScrollToNode(hasContentDescription("后一小时"))
+        compose.onNodeWithContentDescription("后一小时").assertIsDisplayed().performClick()
+        capture("21-chart-large-dark")
     }
     @Test fun connectionSelectionUsesInstalledAppsAndRequestsSystemAccessDirectly() {
         var selected="";var permission:Source?=null
