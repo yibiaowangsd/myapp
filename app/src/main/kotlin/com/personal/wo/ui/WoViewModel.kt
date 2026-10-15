@@ -108,6 +108,18 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
             g.collector.pull(true)
         }
     }
+    fun completeDirectSetup() {
+        if(!mutable.value.policy.requested && mutable.value.policy.startedMs==null) beginRecording(mutable.value.policy.enabledSources)
+        else permissionsChanged()
+    }
+    fun reconnectSteps()=action { g ->
+        g.repo.configure { it.copy(enabledSources=it.enabledSources+Source.STEPS) }
+        if(!g.repo.cachedPolicy.requested && g.repo.cachedPolicy.startedMs==null)g.repo.command("start")
+        app.stopService(Intent(app,RecordingService::class.java))
+        if(g.repo.cachedPolicy.requested&&!g.repo.cachedPolicy.paused)RecordingService.start(app)
+        g.collector.probe()
+        message(if(g.repo.cachedPolicy.paused)"记录处于暂停状态，继续记录后开始计步" else "正在重新连接手机计步器，走动后会自动更新")
+    }
     fun source(source:Source,on:Boolean)=action { g ->
         g.repo.configure { it.copy(enabledSources=if(on)it.enabledSources+source else it.enabledSources-source) }
         app.stopService(Intent(app,RecordingService::class.java))

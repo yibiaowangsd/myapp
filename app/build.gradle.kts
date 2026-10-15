@@ -13,8 +13,8 @@ android {
         applicationId = "com.personal.wo"
         minSdk = 29
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.1.0"
+        versionCode = 5
+        versionName = "1.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         kapt { arguments { arg("room.schemaLocation", "$projectDir/schemas") } }
     }

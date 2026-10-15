@@ -1,0 +1,100 @@
+{
+  "date": "2026-10-15T13:52:48.727770+08:00",
+  "version": "1.1.0",
+  "versionCode": 4,
+  "package": "com.personal.wo",
+  "databaseVersion": 1,
+  "build": "PASS",
+  "buildExitCode": 0,
+  "tests": [
+    {
+      "name": "com.personal.wo.core.DayPresentationTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T05:45:19.930Z"
+    },
+    {
+      "name": "com.personal.wo.core.EngineTest",
+      "tests": "33",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T05:45:20.014Z"
+    },
+    {
+      "name": "com.personal.wo.core.StreamingCryptoTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T05:45:20.094Z"
+    },
+    {
+      "name": "com.personal.wo.DatabaseOpenCallbackTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T05:46:19.360Z"
+    },
+    {
+      "name": "com.personal.wo.StartupRecoveryTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T05:46:19.384Z"
+    },
+    {
+      "name": "com.personal.wo.UiFlowTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T05:46:19.913Z"
+    }
+  ],
+  "testCount": 59,
+  "lintErrors": 0,
+  "uiRendering": "Robolectric API 35 native graphics; production Compose components; Android View.draw/Skia",
+  "uiImages": [
+    "01-welcome.png",
+    "02-permissions.png",
+    "03-today.png",
+    "04-visuals.png",
+    "05-empty.png",
+    "06-large-text.png",
+    "07-dark.png",
+    "08-timeline.png",
+    "09-history.png",
+    "10-me.png"
+  ],
+  "smallScreen": {
+    "widthDp": 360,
+    "heightDp": 800,
+    "fontScale": 1.5
+  },
+  "androidInstrumentation": "4 tests compiled; not run on device",
+  "huaweiPermissionScreens": "NOT_DEVICE_TESTED",
+  "apks": [
+    {
+      "apk": "Wo_Android_v1.1.0_Offline.apk",
+      "sha256": "de097e8ca970aacb6e8156264a955bbd3176fb02081521ecd821b407374788cc",
+      "sizeBytes": 9127701,
+      "hasInternet": false,
+      "staticChecks": "PASS"
+    },
+    {
+      "apk": "Wo_Android_v1.1.0_Enhanced.apk",
+      "sha256": "5e64ead20826e3856e2dbd87ee75687f87618725d035affcffc4c0a3bfc705cc",
+      "sizeBytes": 9193253,
+      "hasInternet": true,
+      "staticChecks": "PASS"
+    }
+  ],
+  "r8MappingVerified": true,
+  "previousStartupFix": "DatabaseOpenCallback query + consumed and closed cursor retained",
+  "signatureContinuity": true
+}

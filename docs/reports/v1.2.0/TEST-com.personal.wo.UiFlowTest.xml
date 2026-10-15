@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.UiFlowTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-15T06:33:54.054Z" hostname="4d93ee73a0a1" time="8.215">
+  <properties/>
+  <testcase name="stepConnectionFailureOffersRetryWithoutHealthConnect" classname="com.personal.wo.UiFlowTest" time="5.886"/>
+  <testcase name="timelineFiltersAndOpensAnEpisode" classname="com.personal.wo.UiFlowTest" time="0.384"/>
+  <testcase name="narrowScreenAndLargeTextKeepSetupAccessible" classname="com.personal.wo.UiFlowTest" time="0.202"/>
+  <testcase name="mePageKeepsPermissionsAndPrivacyReachable" classname="com.personal.wo.UiFlowTest" time="0.203"/>
+  <testcase name="photosStayInTheirTimePartAndCanOpenEvenWhenFileIsUnavailable" classname="com.personal.wo.UiFlowTest" time="0.179"/>
+  <testcase name="emptyDashboardOffersSetupAndDoesNotInventMeasurements" classname="com.personal.wo.UiFlowTest" time="0.198"/>
+  <testcase name="dashboardShowsActualDataAndScrollableVisuals" classname="com.personal.wo.UiFlowTest" time="0.461"/>
+  <testcase name="historyCalendarOpensSelectedDate" classname="com.personal.wo.UiFlowTest" time="0.278"/>
+  <testcase name="permissionsOpenSystemDirectlyAndOfferOneBatchAction" classname="com.personal.wo.UiFlowTest" time="0.218"/>
+  <testcase name="darkDashboardRendersAndExitsDemo" classname="com.personal.wo.UiFlowTest" time="0.206"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[[Robolectric] WARN: Android SDK 36 requires Java 21 (have Java 17). Tests won't be run on SDK 36 unless explicitly requested.
+]]></system-err>
+</testsuite>

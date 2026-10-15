@@ -25,9 +25,6 @@ import java.time.format.DateTimeFormatter
 
 @Composable fun WoAppUi(vm:WoViewModel,authorize:(Source)->Unit,background:()->Unit,export:(String)->Unit,restoreUri:Uri?,clearUri:()->Unit,lock:(Boolean)->Unit) {
     val context=LocalContext.current
-    val preferences=remember { context.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE) }
-    var onboarding by rememberSaveable { mutableStateOf(!preferences.getBoolean("onboarding_v1",false)) }
-    fun finishOnboarding() { preferences.edit().putBoolean("onboarding_v1",true).apply();onboarding=false }
     val s by vm.state.collectAsState();var tab by rememberSaveable { mutableIntStateOf(0) };var page by rememberSaveable { mutableStateOf("") };var parent by rememberSaveable { mutableStateOf("") }
     val snackbar=remember { SnackbarHostState() };val holder=rememberSaveableStateHolder();LaunchedEffect(s.message) { s.message?.let { snackbar.showSnackbar(it);vm.message(null) } }
     fun setup() { if(s.demo)vm.demo(false);page="setup" }
@@ -38,11 +35,6 @@ import java.time.format.DateTimeFormatter
         if(returnToToday)vm.date(LocalDate.now(ZoneId.of(s.policy.archiveZone)))
     }
     BackHandler(page.isNotBlank()){back()}
-    if(onboarding && s.loaded) {
-        OnboardingFlow(s, authorize, { chosen -> finishOnboarding();vm.beginRecording(chosen) },
-            { finishOnboarding() }, { finishOnboarding();vm.demo(true) },snackbar)
-        return
-    }
     Scaffold(containerColor=MaterialTheme.colorScheme.background,snackbarHost={SnackbarHost(snackbar)},bottomBar={ if(page.isBlank()) AppNavigation(tab) { i -> tab=i;if(i==0&&!s.demo)vm.date(LocalDate.now(ZoneId.of(s.policy.archiveZone))) } }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding),contentAlignment=Alignment.TopCenter) {
             Column(Modifier.widthIn(max=680.dp).fillMaxSize().padding(horizontal=16.dp)) {
@@ -55,12 +47,12 @@ import java.time.format.DateTimeFormatter
                 if(!s.loaded)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
                 else holder.SaveableStateProvider(if(page.isBlank())"tab-$tab" else page) { when(page){
                     "settings"->SettingsPage(s,vm,authorize,background,export,lock,false)
-                    "setup"->PermissionCenter(s,authorize,vm::source,background,{(context as? MainActivity)?.requestStatusNotification()},{if(s.policy.requested&&!s.policy.paused)vm.refresh() else vm.recording(if(s.policy.paused)"resume" else "start")},{(context as? MainActivity)?.requestHealthBackground()})
+                    "setup"->PermissionCenter(s,authorize,vm::source,background,{(context as? MainActivity)?.requestStatusNotification()},{if(s.policy.requested&&!s.policy.paused)vm.refresh() else vm.recording(if(s.policy.paused)"resume" else "start")},{(context as? MainActivity)?.requestHealthBackground()},{(context as? MainActivity)?.requestMissingPermissions()},vm::reconnectSteps)
                     "insights"->InsightPage(s)
                     "search"->SearchPage(s,vm,::open)
                     "episode"->EpisodePage(s,vm,::back)
                     "day"->TimelinePage(s,{vm.date(it)},::open)
-                    else->when(tab){0->TodayDashboard(s,{page="day"},{setup()},::open,{vm.refresh()},{vm.demo(it)},{vm.recording(if(s.policy.paused)"resume" else if(!s.policy.requested)"start" else "pause")});1->HistoryPage(s){vm.date(it);page="day"};else->MePage(s,{setup()},{page="settings"},{page="insights"},{vm.recording(if(s.policy.paused)"resume" else if(!s.policy.requested)"start" else "pause")},{vm.demo(true);tab=0})}
+                    else->when(tab){0->TodayDashboard(s,{page="day"},{setup()},::open,{vm.refresh()},{vm.demo(it)},{vm.recording(if(s.policy.paused)"resume" else if(!s.policy.requested)"start" else "pause")},{val step=s.sources.firstOrNull{it.source==Source.STEPS};if(sourceReady(step))vm.reconnectSteps() else {vm.source(Source.STEPS,true);authorize(Source.STEPS)}});1->HistoryPage(s){vm.date(it);page="day"};else->MePage(s,{setup()},{page="settings"},{page="insights"},{vm.recording(if(s.policy.paused)"resume" else if(!s.policy.requested)"start" else "pause")},{vm.demo(true);tab=0})}
                 } }
             }
         }

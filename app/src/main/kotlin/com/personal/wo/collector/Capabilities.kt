@@ -26,17 +26,29 @@ object Capabilities {
     fun notices(c:Context)=c.packageName in NotificationManagerCompat.getEnabledListenerPackages(c)
     fun window(c:Context):Boolean=Settings.Secure.getString(c.contentResolver,Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)?.split(":")?.any { ComponentName.unflattenFromString(it)==ComponentName(c,WindowListener::class.java) } ?: false
     fun location(c:Context)=granted(c,Manifest.permission.ACCESS_COARSE_LOCATION) || granted(c,Manifest.permission.ACCESS_FINE_LOCATION)
-    fun steps(c:Context)=granted(c,Manifest.permission.ACTIVITY_RECOGNITION) && c.getSystemService(SensorManager::class.java).getDefaultSensor(Sensor.TYPE_STEP_COUNTER)!=null
+    fun steps(c:Context)=granted(c,Manifest.permission.ACTIVITY_RECOGNITION) && StepSensors.supported(c)
     fun healthPermissions():Set<String> = setOf(HealthPermission.getReadPermission(StepsRecord::class),HealthPermission.getReadPermission(SleepSessionRecord::class),HealthPermission.getReadPermission(ExerciseSessionRecord::class))
     suspend fun probe(c:Context,p:Policy):List<SourceState> {
-        fun s(source:Source,grant:Boolean,support:Boolean=true,detail:String="",partial:Boolean=false)=SourceState(source,support,if(grant) if(partial) "PARTIAL" else "GRANTED" else "DENIED",if(!p.requested) "STOPPED" else if(p.paused) "PAUSED" else if(grant&&support) "RUNNING" else "STOPPED",detail=detail)
+        fun s(source:Source,grant:Boolean,support:Boolean=true,detail:String="",partial:Boolean=false)=SourceState(source,support,if(grant) if(partial) "PARTIAL" else "GRANTED" else "DENIED",if(!p.requested||source !in p.enabledSources) "STOPPED" else if(p.paused) "PAUSED" else if(grant&&support) "RUNNING" else "STOPPED",detail=detail)
         return Source.entries.map { source -> probeSource(source,p) { when(source) {
             Source.USAGE -> s(source,usage(c),detail="公开UsageEvents；统计活动区间并去除重叠")
             Source.LOCATION -> {
                 val lm=c.getSystemService(LocationManager::class.java)
                 s(source,location(c),lm!=null&&lm.allProviders.any { it!=LocationManager.PASSIVE_PROVIDER },if(lm?.isLocationEnabled!=true) "系统定位开关关闭" else "框架定位；无需Google服务")
             }
-            Source.STEPS -> s(source,granted(c,Manifest.permission.ACTIVITY_RECOGNITION),c.getSystemService(SensorManager::class.java)?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)!=null,"硬件计步；不使用全天加速度计采样")
+            Source.STEPS -> {
+                val grant=granted(c,Manifest.permission.ACTIVITY_RECOGNITION)
+                // Some vendor builds hide sensors until activity permission is granted.
+                // Keep the authorization entry available before the first grant.
+                val supported=!grant||StepSensors.supported(c)
+                val active=p.requested&&!p.paused&&source in p.enabledSources&&grant&&supported
+                s(source,grant,supported,when {
+                    !supported->"系统没有向此应用开放硬件计步器或单步检测器"
+                    !grant->"允许身体活动权限即可使用手机计步，无需 Health Connect"
+                    active->StepSensors.detail
+                    else->"手机计步独立工作，无需连接健康服务"
+                }).let { if(active)it.copy(runtime=StepSensors.connection) else it }
+            }
             Source.NOTIFICATION -> s(source,notices(c),detail="只记录授权后的通知片段；正文解析需要单独选择应用")
             Source.MEDIA -> s(source,notices(c),detail="通过媒体会话被动观察；不控制播放")
             Source.PHOTO -> {
@@ -55,7 +67,7 @@ object Capabilities {
     }
     fun sourceName(s:Source)=when(s) { Source.USAGE->"应用活动";Source.LOCATION->"位置与足迹";Source.STEPS->"硬件步数";Source.NOTIFICATION->"通知线索";Source.MEDIA->"媒体播放";Source.PHOTO->"照片与视频";Source.CALENDAR->"日历计划";Source.HEALTH->"活动与健康";Source.ACCESSIBILITY->"窗口切换增强" }
     fun special(c:Context,source:Source):Intent=when(source) {
-        Source.USAGE -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+        Source.USAGE -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS,android.net.Uri.parse("package:${c.packageName}"))
         Source.NOTIFICATION,Source.MEDIA -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
         Source.ACCESSIBILITY -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         Source.HEALTH -> Intent("android.health.connect.action.HEALTH_HOME_SETTINGS")

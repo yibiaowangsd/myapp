@@ -22,7 +22,11 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
     private lateinit var handler:Handler
     private lateinit var location:LocationManager
     private lateinit var sensors:SensorManager
-    private val baseline=StepBaseline()
+    private var stepDevice:StepCandidate<Sensor>?=null
+    private var readings:StepReadings?=null
+    private var firstStepEvent=true
+    private var stepFlushQueued=false
+    private val flushRunnable=Runnable { stepFlushQueued=false;guardedSensors { flushSteps() } }
     private var pendingSteps=0L;private var stepStart=0L;private var stepEnd=0L
     private var lastPoint:Location?=null;private var movementAt=0L;private var lastGnss=0L
     private var positionMode="";private var registered=false;private var startMs=0L
@@ -60,7 +64,22 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
     override fun onBind(intent:Intent?):IBinder?=null
     private fun register(stepEnabled:Boolean) {
         if(registered)return;registered=true
-        if(stepEnabled) sensors.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)?.let { sensors.registerListener(this,it,SensorManager.SENSOR_DELAY_NORMAL,300_000_000,handler) }
+        if(stepEnabled) {
+            stepDevice=StepSensors.register(sensors,this,handler)
+            readings=stepDevice?.let { StepReadings(it.counter) }
+            wo().scope.launch { wo().graph().collector.probe() }
+            handler.postDelayed({
+                // Some vendor counters accept registration but never emit a first event.
+                // Switch streams, never sum a counter and a detector at the same time.
+                if(firstStepEvent&&stepDevice?.counter==true&&StepSensors.candidates(sensors).any{!it.counter}) {
+                    sensors.unregisterListener(this,stepDevice!!.sensor)
+                    stepDevice=StepSensors.register(sensors,this,handler,detectorOnly=true)
+                    if(stepDevice==null)stepDevice=StepSensors.register(sensors,this,handler)
+                    readings=stepDevice?.let{StepReadings(it.counter)}
+                    wo().scope.launch { wo().graph().collector.probe() }
+                }
+            },45_000)
+        }
         registerMotion()
         observer=object:ContentObserver(handler) { override fun onChange(selfChange:Boolean) { WorkScheduling.dayBuild(this@RecordingService);WorkScheduling.mediaPull(this@RecordingService) } }
         try { contentResolver.registerContentObserver(MediaStore.Files.getContentUri("external"),true,observer!!) } catch(e:SecurityException) { observer=null }
@@ -142,20 +161,37 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
         guardedSensors { acceptSteps(event) }
     }
     private fun acceptSteps(event:SensorEvent) {
+        val device=stepDevice ?: return
+        if(event.sensor!=device.sensor||event.values.isEmpty())return
         val now=System.currentTimeMillis();val boot=Settings.Global.getInt(contentResolver,Settings.Global.BOOT_COUNT,0).toString()
-        val delta=baseline.update(event.values[0].toLong(),boot,now) ?: return
+        if(!event.values[0].isFinite()||event.timestamp>SystemClock.elapsedRealtimeNanos()||event.values[0]<0||(!device.counter&&event.values[0]!=1f))return
+        if(now-(SystemClock.elapsedRealtimeNanos()-event.timestamp)/1_000_000<startMs)return
+        val delta=readings?.accept(event.values[0],event.timestamp,now,SystemClock.elapsedRealtimeNanos(),boot)
+        if(firstStepEvent) {
+            firstStepEvent=false;StepSensors.received(now)
+            // The initial counter establishes a baseline, never today's total since boot.
+            if(device.counter) {
+                val g=wo().currentGraph ?: return
+                val key=g.vault.sourceKey("step-baseline",boot,startMs)
+                g.offer(Observation(stableId(Source.STEPS,key),Source.STEPS,key,Kind.STEP_DELTA,now,now,
+                    payload=Payload(steps=0,provider="COUNTER_BASELINE")))
+            }
+            wo().scope.launch { wo().graph().collector.probe() }
+        }
+        if(delta==null)return
         if(delta.second<=0)return
+        StepSensors.received(now)
         movementAt=now
         if(pendingSteps==0L)stepStart=delta.first.start
         stepEnd=delta.first.end;pendingSteps+=delta.second
-        if(stepEnd-stepStart>=60_000)flushSteps()
+        if(!stepFlushQueued) { stepFlushQueued=true;handler.postDelayed(flushRunnable,5_000) }
         adjust()
     }
     private fun flushSteps() {
         val g=wo().currentGraph ?: return
         if(pendingSteps==0L)return
         val key=g.vault.sourceKey("steps",stepStart,stepEnd,pendingSteps)
-        g.offer(Observation(stableId(Source.STEPS,key),Source.STEPS,key,Kind.STEP_DELTA,stepStart,stepEnd,System.currentTimeMillis(),bootId=Settings.Global.getInt(contentResolver,Settings.Global.BOOT_COUNT,0).toString(),payload=Payload(steps=pendingSteps)))
+        g.offer(Observation(stableId(Source.STEPS,key),Source.STEPS,key,Kind.STEP_DELTA,stepStart,stepEnd,System.currentTimeMillis(),bootId=Settings.Global.getInt(contentResolver,Settings.Global.BOOT_COUNT,0).toString(),payload=Payload(steps=pendingSteps,provider=if(stepDevice?.counter==true)"STEP_COUNTER" else "STEP_DETECTOR")))
         pendingSteps=0
     }
     override fun onAccuracyChanged(sensor:Sensor?,accuracy:Int)=Unit
@@ -168,7 +204,11 @@ class RecordingService:Service(),SensorEventListener,LocationListener {
         handler.postDelayed({ guardedSensors { audit() } },300_000)
     }
     override fun onDestroy() {
-        if(::handler.isInitialized) { handler.removeCallbacksAndMessages(null);flushSteps();sensors.unregisterListener(this);sensors.getDefaultSensor(Sensor.TYPE_SIGNIFICANT_MOTION)?.let { sensors.cancelTriggerSensor(motion,it) };runCatching { location.removeUpdates(this);location.removeUpdates(gpsListener) };observer?.let { contentResolver.unregisterContentObserver(it) };thread.quitSafely() }
+        StepSensors.stopped()
+        if(::handler.isInitialized) {
+            handler.removeCallbacksAndMessages(null)
+            handler.post { flushSteps();sensors.unregisterListener(this);sensors.getDefaultSensor(Sensor.TYPE_SIGNIFICANT_MOTION)?.let { sensors.cancelTriggerSensor(motion,it) };runCatching { location.removeUpdates(this);location.removeUpdates(gpsListener) };observer?.let { runCatching { contentResolver.unregisterContentObserver(it) } };thread.quitSafely() }
+        }
         super.onDestroy()
     }
     companion object {

@@ -32,7 +32,20 @@ import java.time.*
 import java.time.format.DateTimeFormatter
 
 object ThumbnailCache{val cache=object:LruCache<String,Bitmap>(24*1024*1024){override fun sizeOf(key:String,value:Bitmap)=value.allocationByteCount};val gate=Semaphore(1)}
-@Composable fun PhotoThumbnail(uri:String){val c=LocalContext.current;val bitmap by produceState<Bitmap?>(null,uri){value=ThumbnailCache.cache.get(uri)?:withContext(Dispatchers.IO){ThumbnailCache.gate.withPermit{runCatching{c.contentResolver.loadThumbnail(Uri.parse(uri),AndroidSize(512,512),null).also{ThumbnailCache.cache.put(uri,it)}}.getOrNull()}}};if(bitmap!=null)Image(bitmap!!.asImageBitmap(),"关联媒体缩略图",Modifier.fillMaxWidth().heightIn(max=260.dp).clip(RoundedCornerShape(14.dp)),contentScale=ContentScale.Fit)else Text("正在加载或原文件不可访问",Modifier.padding(18.dp))}
+@Composable fun PhotoThumbnail(uri:String,modifier:Modifier=Modifier.fillMaxWidth().heightIn(min=100.dp,max=260.dp),crop:Boolean=false) {
+    val context=LocalContext.current
+    var finished by remember(uri){mutableStateOf(false)}
+    val bitmap by produceState<Bitmap?>(ThumbnailCache.cache.get(uri),uri) {
+        value=value?:withContext(Dispatchers.IO){ThumbnailCache.gate.withPermit{
+            runCatching{context.contentResolver.loadThumbnail(Uri.parse(uri),AndroidSize(512,512),null).also{ThumbnailCache.cache.put(uri,it)}}.getOrNull()
+        }}
+        finished=true
+    }
+    if(bitmap!=null)Image(bitmap!!.asImageBitmap(),"关联媒体缩略图",modifier.clip(RoundedCornerShape(14.dp)),contentScale=if(crop)ContentScale.Crop else ContentScale.Fit)
+    else Surface(modifier.clip(RoundedCornerShape(14.dp)),color=MaterialTheme.colorScheme.surfaceVariant) {
+        Box(Modifier.padding(12.dp),contentAlignment=Alignment.Center){Text(if(finished)"照片暂不可访问" else "照片加载中",style=MaterialTheme.typography.labelSmall)}
+    }
+}
 @Composable fun Footprints(d:DayView,positions:List<Observation>,open:(Episode)->Unit){
     val stays=d.episodes.filter{it.lat!=null&&it.lon!=null};val valid=positions.filter{(it.payload.accuracyM?:9999.0)<=200&&!it.payload.mock&&it.payload.lat!=null&&it.payload.lon!=null};val anchorLat=stays.firstOrNull()?.lat?:valid.firstOrNull()?.payload?.lat?:return;val anchorLon=stays.firstOrNull()?.lon?:valid.firstOrNull()?.payload?.lon?:return
     val points=stays.map{project(it.lat!!,it.lon!!,anchorLat,anchorLon)}+valid.map{project(it.payload.lat!!,it.payload.lon!!,anchorLat,anchorLon)};val minX=points.minOf{it.x};val maxX=points.maxOf{it.x};val minY=points.minOf{it.y};val maxY=points.maxOf{it.y};val span=maxOf(maxX-minX,maxY-minY,.001)

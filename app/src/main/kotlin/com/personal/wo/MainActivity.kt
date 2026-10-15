@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModelProvider
 import com.personal.wo.collector.Capabilities
+import com.personal.wo.collector.DirectPermissionPlan
 import com.personal.wo.collector.OptionalHealthPermissionContract
 import com.personal.wo.core.Source
 import com.personal.wo.ui.*
@@ -27,14 +28,18 @@ class MainActivity:ComponentActivity() {
     private val unlocked=mutableStateOf(false)
     private var stoppedAt=0L
     private var prompt:CancellationSignal?=null
+    private var quickActive=false
+    private var quickStages=ArrayDeque<Source>()
     private val permissions=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if(::vm.isInitialized) {
-            vm.permissionsChanged()
-            vm.message(if(result.values.any{it})"权限已更新，可继续选择其他来源" else "本次未开启权限，你可以跳过或稍后调整")
+            if(quickActive)advanceQuickPermissions() else {
+                vm.permissionsChanged()
+                vm.message(if(result.values.any{it})"权限已更新" else "保留你的选择，稍后可在记录权限中调整")
+            }
         }
     }
     private val health=registerForActivityResult(OptionalHealthPermissionContract()) { if(::vm.isInitialized)vm.permissionsChanged() }
-    private val settingsResult=registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { if(::vm.isInitialized)vm.permissionsChanged() }
+    private val settingsResult=registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { if(::vm.isInitialized) { if(quickActive)advanceQuickPermissions() else vm.permissionsChanged() } }
     private val archive=registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> uri?.let { vm.export(it,true) } }
     private val summary=registerForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri -> uri?.let { vm.export(it,false) } }
     private val summaryJson=registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let { vm.export(it,false,true) } }
@@ -42,6 +47,8 @@ class MainActivity:ComponentActivity() {
     private val restoreUri=mutableStateOf<android.net.Uri?>(null)
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
+        quickActive=savedInstanceState?.getBoolean("quickActive") ?: false
+        quickStages=ArrayDeque(savedInstanceState?.getStringArrayList("quickStages")?.mapNotNull { runCatching { Source.valueOf(it) }.getOrNull() } ?: emptyList())
         recoverableCall { enableEdgeToEdge() }.onFailure { wo().diagnostics.record("窗口适配",it) }
         val created=recoverableCall { ViewModelProvider(this)[WoViewModel::class.java] }
         created.exceptionOrNull()?.let { error ->
@@ -53,11 +60,49 @@ class MainActivity:ComponentActivity() {
         setContent {
             val state by vm.state.collectAsState()
             LaunchedEffect(state.loaded,state.policy.lockUi,state.startupError) { if(state.loaded&&state.startupError==null) { if(state.policy.lockUi&&stoppedAt==0L) { unlocked.value=false;authenticate() } else if(!state.policy.lockUi)unlocked.value=true } }
+            LaunchedEffect(state.loaded,state.sources.size,unlocked.value) {
+                if(state.loaded&&state.startupError==null&&unlocked.value&&state.sources.size==Source.entries.size&&
+                    !getSharedPreferences("ui",MODE_PRIVATE).getBoolean("direct_permissions_v2",false)) requestMissingPermissions()
+            }
             WoTheme { if(state.startupError!=null) StartupFailureScreen(state.startupError!!,vm::retryStartup,{copyDiagnostic(state.startupError!!)})
             else if(!state.loaded) StartupLoadingScreen()
             else if(unlocked.value) WoAppUi(vm,{ authorize(it) },{ background() },{ kind -> when(kind) { "archive"->archive.launch("Wo_Backup.woarchive");"json"->summaryJson.launch("Wo_${state.selectedDate}.json");"restore"->openArchive.launch(arrayOf("*/*"));else->summary.launch("Wo_${state.selectedDate}.md") } },restoreUri.value,{restoreUri.value=null},{on->
                 if(on&&!getSystemService(KeyguardManager::class.java).isDeviceSecure)vm.message("请先设置手机系统锁屏，再开启查看锁") else vm.lock(on)
             }) else UnlockScreen { authenticate() } }
+        }
+    }
+    override fun onSaveInstanceState(outState:Bundle) {
+        outState.putBoolean("quickActive",quickActive)
+        outState.putStringArrayList("quickStages",ArrayList(quickStages.map { it.name }))
+        super.onSaveInstanceState(outState)
+    }
+    fun requestMissingPermissions() {
+        if(quickActive||!::vm.isInitialized)return
+        getSharedPreferences("ui",MODE_PRIVATE).edit().putBoolean("direct_permissions_v2",true).apply()
+        val state=vm.state.value
+        val enabled=state.policy.enabledSources
+        quickActive=true
+        quickStages=ArrayDeque(DirectPermissionPlan.special(enabled,state.sources))
+        val asked=getSharedPreferences("permission_requests",MODE_PRIVATE)
+        val wanted=DirectPermissionPlan.ordinary(Build.VERSION.SDK_INT,enabled,state.sources.filter { it.supported }.map { it.source }.toSet())
+            .filter { !Capabilities.granted(this,it)&&(!asked.getBoolean(it,false)||shouldShowRequestPermissionRationale(it)) }.toMutableList()
+        if(Manifest.permission.ACCESS_FINE_LOCATION in wanted&&Manifest.permission.ACCESS_COARSE_LOCATION !in wanted)wanted+=Manifest.permission.ACCESS_COARSE_LOCATION
+        if(wanted.isEmpty())advanceQuickPermissions()
+        else {
+            asked.edit().apply { wanted.forEach { putBoolean(it,true) } }.apply()
+            recoverableCall { permissions.launch(wanted.toTypedArray()) }.onFailure { advanceQuickPermissions() }
+        }
+    }
+    private fun advanceQuickPermissions() {
+        val source=quickStages.removeFirstOrNull()
+        if(source!=null) {
+            recoverableCall { settingsResult.launch(Capabilities.special(this,source)) }.onFailure {
+                // One attempt per page; a missing OEM activity must never trap the user.
+                advanceQuickPermissions()
+            }
+        } else {
+            quickActive=false
+            vm.completeDirectSetup()
         }
     }
     private fun copyDiagnostic(report:String) {

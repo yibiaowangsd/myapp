@@ -20,119 +20,6 @@ import com.personal.wo.core.*
 import java.time.*
 import java.util.Locale
 
-@Composable fun TodayDashboard(s:WoUiState, detail:()->Unit, setup:()->Unit, episode:(Episode)->Unit,
-    refresh:()->Unit, demo:(Boolean)->Unit, recording:()->Unit) {
-    val day=s.day ?: return
-    val date=LocalDate.parse(day.dayDate)
-    LazyColumn(Modifier.testTag("today-list"),verticalArrangement=Arrangement.spacedBy(14.dp),contentPadding=PaddingValues(top=10.dp,bottom=28.dp)) {
-        item {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("${date.monthValue}月${date.dayOfMonth}日",style=MaterialTheme.typography.headlineLarge)
-                    Muted("星期${listOf("一","二","三","四","五","六","日")[date.dayOfWeek.value-1]} · 截至 ${clock(day.asOfMs,day.zoneId)}")
-                }
-                StatusPill(if(s.demo)"演示数据" else if(s.policy.paused)"已暂停" else if(s.policy.requested)"记录中" else "未开始")
-            }
-        }
-        if(s.demo)item {
-            Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=RoundedCornerShape(16.dp)) {
-                Row(Modifier.padding(start=14.dp,end=4.dp),verticalAlignment=Alignment.CenterVertically) {
-                    Text("虚构的一天 · 仅用于预览",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick={demo(false)}){Text("退出演示")}
-                }
-            }
-        }
-        if(!s.policy.requested&&!s.demo) {
-            item {
-                Surface(shape=RoundedCornerShape(28.dp),color=Violet,contentColor=Color.White) {
-                    Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
-                        Icon(Icons.Outlined.DateRange,null,Modifier.size(32.dp))
-                        Text("让每一天，\n都有迹可循。",style=MaterialTheme.typography.headlineLarge)
-                        Text("选择你想留下的记录。授权后，手机会自动整理足迹、活动与生活片段。",color=Color.White.copy(alpha=.85f))
-                        Button(onClick=setup,modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=Color.White,contentColor=Violet)){Text("选择记录内容")}
-                    }
-                }
-            }
-            item { OutlinedButton(onClick={demo(true)},modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("先看看，一天会怎样呈现")} }
-        } else {
-            item { UsageHero(day) }
-            item {
-                Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                    val steps=day.metrics.firstOrNull{it.key=="steps"}?.value
-                    val photos=day.metrics.firstOrNull{it.key=="photos"}?.value
-                    MetricTile("今日步数",steps?.let{String.format(Locale.CHINA,"%,d",it)} ?: "暂无",if(steps==null)"等待步数来源" else "步 · 来源已记录",Icons.Outlined.DirectionsWalk,laneTint(Lane.PLACE),Modifier.weight(1f),setup)
-                    MetricTile("照片与视频",photos?.toString() ?: "暂无",if(photos==null)"等待相册来源" else "项 · 当天关联",Icons.Outlined.PhotoLibrary,laneTint(Lane.LIFE),Modifier.weight(1f),setup)
-                }
-            }
-            if(day.sentences.isNotEmpty())item { Paper { Text("今天的回顾",style=MaterialTheme.typography.titleMedium);Muted(day.sentences.take(3).joinToString(""){it.text}) } }
-            if(!s.demo)item {
-                val usable=s.sources.count{sourceReady(it)&&it.source in s.policy.enabledSources}
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                    TextButton(onClick=setup){Text("$usable 项来源可用")}
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick=recording){Text(if(s.policy.paused)"继续记录" else "暂停")}
-                    IconButton(onClick=refresh,enabled=!s.busy){Icon(Icons.Outlined.Refresh,"同步记录")}
-                }
-            }
-        }
-        if(day.episodes.any{it.kind=="STAY"})item { Section("今天的足迹");PlaceJourney(day,episode) }
-        if(appDurations(day).isNotEmpty())item { Section("时间花在了哪里");AppTimeCard(day) }
-        item { Section("生活时间线","全部片段",detail) }
-        val highlights=day.episodes.filter{it.assertion!=Assertion.UNKNOWN}.sortedBy{it.startMs}.takeLast(6)
-        if(highlights.isEmpty())item {
-            Paper {
-                IconTile(Icons.Outlined.DateRange)
-                Text(if(s.policy.requested)"正在等待第一段记录" else "你的第一天，从这里开始",style=MaterialTheme.typography.titleMedium)
-                Muted(if(s.policy.requested)"已授权的应用活动可以同步；足迹和步数会在你正常使用手机时逐渐出现。" else "你不用写日记。开启想记录的来源，让片段自然积累。")
-                TextButton(onClick=setup){Text(if(s.policy.requested)"查看授权状态" else "设置记录权限")}
-            }
-        }
-        items(highlights,key={it.id}) { e -> EpisodeCard(e,day.zoneId){episode(e)} }
-    }
-}
-
-@Composable fun UsageHero(day:DayView) {
-    val hours=remember(day){hourlyUsage(day)}
-    val known=day.metrics.firstOrNull{it.key=="appMs"}?.value
-    val total=remember(day){union(observedAppSpans(day).map{it.second}).sumOf{it.duration}}
-    Surface(Modifier.fillMaxWidth(),shape=RoundedCornerShape(28.dp),color=Violet,contentColor=Color.White) {
-        Column(Modifier.padding(22.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment=Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Smartphone,null,Modifier.size(18.dp))
-                Text("手机使用",Modifier.weight(1f).padding(start=8.dp),style=MaterialTheme.typography.titleMedium)
-                Text("已观察时长",style=MaterialTheme.typography.labelMedium,color=Color.White.copy(alpha=.78f))
-            }
-            Text(if(known==null&&total==0L)"等待记录" else durationText(total),style=MaterialTheme.typography.headlineLarge)
-            Column(Modifier.clearAndSetSemantics { contentDescription="每小时应用活动。"+hours.filter{it.durationMs>0}.joinToString { "${clock(it.startMs,day.zoneId)}，${durationText(it.durationMs)}" } }) {
-                Row(Modifier.fillMaxWidth().height(48.dp),horizontalArrangement=Arrangement.spacedBy(4.dp),verticalAlignment=Alignment.Bottom) {
-                    hours.forEach { hour ->
-                        Box(Modifier.weight(1f).height(if(hour.durationMs>0)(hour.durationMs/3_600_000f*44).coerceAtLeast(4f).dp else 2.dp)
-                            .clip(RoundedCornerShape(3.dp)).background(if(hour.durationMs>0)Color(0xFFE5DBFF) else Color.White.copy(alpha=.20f)))
-                    }
-                }
-                Row(Modifier.fillMaxWidth().padding(top=6.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-                    (0..4).forEach { i ->
-                        val label=if(i==4)"24:00" else clock(day.windowStartMs+(day.windowEndMs-day.windowStartMs)*i/4,day.zoneId)
-                        Text(label,style=MaterialTheme.typography.labelSmall,color=Color.White.copy(alpha=.75f))
-                    }
-                }
-            }
-            Text("柱高表示每小时使用量 · 空白时段暂无记录",style=MaterialTheme.typography.labelSmall,color=Color.White.copy(alpha=.85f))
-        }
-    }
-}
-
-@Composable private fun MetricTile(title:String,value:String,caption:String,icon:androidx.compose.ui.graphics.vector.ImageVector,color:Color,modifier:Modifier,onClick:()->Unit) {
-    Surface(modifier.clickable(onClick=onClick),shape=RoundedCornerShape(22.dp),color=MaterialTheme.colorScheme.surface) {
-        Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(9.dp)) {
-            Icon(icon,null,Modifier.size(22.dp),tint=color)
-            Text(title,style=MaterialTheme.typography.bodyMedium)
-            Text(value,style=MaterialTheme.typography.headlineMedium)
-            Muted(caption)
-        }
-    }
-}
-
 @Composable fun AppTimeCard(day:DayView) {
     val rows=remember(day){appDurations(day).take(5)}
     val max=rows.maxOfOrNull{it.durationMs}?.coerceAtLeast(1) ?: 1L
@@ -182,7 +69,7 @@ import java.util.Locale
         }
         Surface(Modifier.weight(1f).clickable(onClick=onClick),shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.surface) {
             Row(Modifier.padding(16.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                IconTile(laneIcon(e.lane),laneTint(e.lane),36)
+                if(e.kind=="APP")AppBadge(e.packageName,e.title) else IconTile(episodeIcon(e),laneTint(e.lane),36)
                 Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
                     Text(e.title,style=MaterialTheme.typography.titleMedium)
                     Muted("${laneName(e.lane)}${if(e.endMs>e.startMs)" · "+durationText(e.endMs-e.startMs) else ""}")

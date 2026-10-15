@@ -42,29 +42,17 @@ class UiFlowTest {
             bitmap.recycle()
         }
     }
-    @Test fun permissionsRequireAnExplicitConfirmationAndAllowSkipping() {
+    @Test fun permissionsOpenSystemDirectlyAndOfferOneBatchAction() {
         var requests=0
-        var started:Set<Source>?=null
-        var browsed=false
-        val current=mutableStateOf(WoUiState(loaded=true,sources=Source.entries.map{SourceState(it)}))
-        compose.setContent { WoTheme(dark=false) { OnboardingFlow(current.value,{requests++},{started=it},{browsed=true},{}) } }
-        compose.onNodeWithText("不用写日记，\n也能记住今天。").assertIsDisplayed()
-        capture("01-welcome")
-        assertEquals(0,requests)
-        compose.onNodeWithText("设置记录权限").performClick()
-        compose.onNodeWithTag("start-recording").assertIsNotEnabled()
-        capture("02-permissions")
+        var batchRequests=0
+        val current=WoUiState(loaded=true,sources=Source.entries.map{SourceState(it)})
+        compose.setContent { WoTheme(dark=false) { PermissionCenter(current,{requests++},{_,_->},{},{},{},{},{batchRequests++},{}) } }
+        capture("01-permissions")
+        compose.onNodeWithTag("request-all").performClick()
+        assertEquals(1,batchRequests)
         compose.onAllNodesWithText("去授权")[0].performClick()
-        assertEquals(0,requests)
-        compose.onNodeWithTag("confirm-permission").performClick()
         assertEquals(1,requests)
-        compose.onNodeWithTag("start-recording").assertIsNotEnabled()
-        compose.runOnIdle { current.value=current.value.copy(sources=Source.entries.map{SourceState(it,authorization=if(it==Source.USAGE)"GRANTED" else "DENIED")}) }
-        compose.onNodeWithTag("start-recording").assertIsEnabled().performClick()
-        assertNotNull(started)
-        assertTrue(Source.USAGE in started!!)
-        compose.onNodeWithText("暂时跳过，先进入首页").performClick()
-        assertTrue(browsed)
+        compose.onNodeWithTag("confirm-permission").assertDoesNotExist()
     }
     @Test fun dashboardShowsActualDataAndScrollableVisuals() {
         var selected:Episode?=null
@@ -75,10 +63,10 @@ class UiFlowTest {
                 }
             }
         } }
-        compose.onNodeWithText("手机使用").assertIsDisplayed()
-        compose.onNodeWithText("4,280").assertExists()
+        compose.onNodeWithText("今日回顾").assertIsDisplayed()
+        compose.onNodeWithText("4,280 步").assertExists()
         capture("03-today")
-        compose.onNodeWithTag("today-list").performScrollToNode(hasText("时间花在了哪里"))
+        compose.onNodeWithTag("today-list").performScrollToNode(hasText("什么时候，打开了什么"))
         capture("04-visuals")
         compose.onNodeWithTag("today-list").performScrollToNode(hasText("办公室"))
         compose.onNodeWithText("办公室",substring=false).performClick()
@@ -88,9 +76,10 @@ class UiFlowTest {
         var setup=false
         val d=state().day!!.copy(episodes=emptyList(),metrics=emptyList(),sentences=emptyList())
         compose.setContent { WoTheme(dark=false) { TodayDashboard(WoUiState(loaded=true,day=d),{},{setup=true},{},{},{},{}) } }
-        compose.onNodeWithText("选择记录内容").performClick()
+        compose.onNodeWithTag("today-list").performScrollToNode(hasText("查看记录权限"))
+        compose.onNodeWithText("查看记录权限").performClick()
         assertTrue(setup)
-        compose.onNodeWithText("4,280").assertDoesNotExist()
+        compose.onNodeWithText("4,280 步").assertDoesNotExist()
         capture("05-empty")
     }
     @Test @Config(qualifiers="zh-rCN-w360dp-h800dp-xhdpi")
@@ -98,11 +87,10 @@ class UiFlowTest {
         compose.setContent {
             val density=LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density,1.5f)) {
-                WoTheme(dark=false) { OnboardingFlow(WoUiState(loaded=true),{},{},{},{}) }
+                WoTheme(dark=false) { PermissionCenter(WoUiState(loaded=true,sources=Source.entries.map{SourceState(it)}),{},{_,_->},{},{},{}) }
             }
         }
-        compose.onNodeWithText("设置记录权限").assertIsDisplayed().performClick()
-        compose.onNodeWithText("暂时跳过，先进入首页").assertIsDisplayed()
+        compose.onNodeWithTag("request-all").assertIsDisplayed().performClick()
         capture("06-large-text")
     }
     @Test fun darkDashboardRendersAndExitsDemo() {
@@ -119,6 +107,27 @@ class UiFlowTest {
         compose.onNodeWithText("浏览器").performScrollTo().performClick()
         assertEquals("浏览器",selected?.title)
         capture("08-timeline")
+    }
+    @Test fun photosStayInTheirTimePartAndCanOpenEvenWhenFileIsUnavailable() {
+        var selected:Episode?=null
+        val d=state().day!!
+        val photo=Episode("test-photo",startMs=d.windowStartMs+13*3_600_000,endMs=d.windowStartMs+13*3_600_000,
+            lane=Lane.LIFE,kind="PHOTO",title="下午照片",assertion=Assertion.RECORDED,photoUris=listOf("content://missing/photo"))
+        val part=recapParts(d.copy(episodes=listOf(photo))).single()
+        compose.setContent { WoTheme(dark=false) { RecapTimelineCard(part,d.zoneId){selected=it} } }
+        compose.onNodeWithText("下午").assertIsDisplayed()
+        compose.onNodeWithText("照片暂不可访问").performClick()
+        assertEquals("test-photo",selected?.id)
+        capture("02-photo-timeline")
+    }
+    @Test fun stepConnectionFailureOffersRetryWithoutHealthConnect() {
+        var connected=false
+        val s=state().copy(demo=false,sources=listOf(SourceState(Source.STEPS,authorization="GRANTED",runtime="ERROR",detail="计步传感器未能连接")))
+        compose.setContent { WoTheme(dark=false) { TodayDashboard(s,{},{},{},{},{},{},{connected=true}) } }
+        compose.onNodeWithTag("today-list").performScrollToNode(hasText("重连"))
+        compose.onNodeWithText("重连").performClick()
+        assertTrue(connected)
+        capture("11-step-retry")
     }
     @Test fun historyCalendarOpensSelectedDate() {
         var selected:LocalDate?=null

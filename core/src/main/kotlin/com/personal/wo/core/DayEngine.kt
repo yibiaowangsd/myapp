@@ -37,7 +37,7 @@ class DayEngine(val config: EngineConfig = EngineConfig()) {
                     detail = "${p.label}；区间跨度不等于去除清醒后的睡眠时长", evidence = listOf(evidence(o, "Health Connect睡眠会话")), amount = p.sleepMinutes)
                 Kind.STEP_DELTA -> if ((p.steps ?: 0) > 0) Episode(stableId("steps", o.sourceKey), startMs = o.startMs, endMs = o.endMs,
                     lane = Lane.ACTIVITY, kind = "STEPS", assertion = Assertion.RECORDED, title = "设备记录到${p.steps}步",
-                    detail = "硬件计步器在同一启动周期中的增量", evidence = listOf(evidence(o, "累计计步差分")), amount = p.steps) else null
+                    detail = if(p.provider=="STEP_DETECTOR") "手机硬件单步检测记录" else "硬件计步器在同一启动周期中的增量", evidence = listOf(evidence(o, if(p.provider=="STEP_DETECTOR") "单步检测事件" else "累计计步差分")), amount = p.steps) else null
                 else -> null
             }
             if (episode != null) result += episode.copy(qualityFlags = o.quality)
