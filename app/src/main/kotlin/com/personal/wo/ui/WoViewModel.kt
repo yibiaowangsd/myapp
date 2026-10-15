@@ -86,6 +86,28 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         if(action=="pause"||action=="stop") { app.stopService(Intent(app,RecordingService::class.java));WorkScheduling.pause(app) }
         else { if(!WorkScheduling.schedule(app))message("系统后台调度暂不可用，打开应用时仍会同步");RecordingService.start(app);g.collector.probe();g.collector.pull(true) }
     } }
+    fun beginRecording(sources:Set<Source>) {
+        mutable.update { it.copy(demo=false) }
+        action { g ->
+            g.repo.configure { it.copy(enabledSources=sources) }
+            g.repo.command(if(g.repo.cachedPolicy.paused) "resume" else "start")
+            g.collector.probe()
+            app.stopService(Intent(app,RecordingService::class.java))
+            if(!WorkScheduling.schedule(app))message("系统后台调度暂不可用，打开应用时仍会同步")
+            RecordingService.start(app)
+            g.collector.pull(true)
+        }
+    }
+    fun permissionsChanged()=action { g ->
+        g.collector.probe()
+        if(g.repo.cachedPolicy.requested&&!g.repo.cachedPolicy.paused) {
+            // A permission return can follow onResume's probe; rebuild active listeners
+            // even when the persisted authorization state has already been refreshed.
+            app.stopService(Intent(app,RecordingService::class.java))
+            RecordingService.start(app)
+            g.collector.pull(true)
+        }
+    }
     fun source(source:Source,on:Boolean)=action { g ->
         g.repo.configure { it.copy(enabledSources=if(on)it.enabledSources+source else it.enabledSources-source) }
         app.stopService(Intent(app,RecordingService::class.java))
@@ -120,11 +142,10 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     }
     fun demo(on:Boolean) {
         if(!on) { mutable.update { it.copy(demo=false) };refresh(false);return }
-        val p=Policy(archiveZone=ZoneId.systemDefault().id);val date=LocalDate.now();val w=window(date,ZoneId.of(p.archiveZone));val minute=60_000L
-        fun e(start:Int,end:Int,lane:Lane,kind:String,title:String,assertion:Assertion=Assertion.RECORDED)=Episode("demo-$kind-$start",startMs=w.start+start*minute,endMs=w.start+end*minute,lane=lane,kind=kind,assertion=assertion,title=title,detail="虚构演示记录，不会写入正式数据库",evidence=listOf(Evidence("demo",Source.USAGE,"demo","独立内存演示样本")))
-        val episodes=listOf(e(420,480,Lane.PLACE,"STAY","家附近停留",Assertion.INFERRED),e(485,520,Lane.ACTIVITY,"MOVE","地点间移动，路线未知",Assertion.INFERRED),e(530,720,Lane.PLACE,"STAY","办公地点附近停留",Assertion.INFERRED),e(550,570,Lane.DIGITAL,"APP","浏览器"),e(700,701,Lane.LIFE,"NOTICE","收到送达提示"),e(740,790,Lane.ACTIVITY,"EXERCISE","来源记录的运动"),e(1090,1140,Lane.PLACE,"STAY","家附近停留",Assertion.INFERRED),e(1200,1235,Lane.LIFE,"MEDIA","媒体播放 · 晚间音乐"))
-        val d=DayView(date.toString(),p.archiveZone,w.start,w.end,w.start+1290*minute,"PARTIAL","今天，一点点被看见",listOf(Sentence("记录到家与办公地点附近的停留。"),Sentence("有一段运动记录和35分钟媒体播放。"),Sentence("下午有一段位置数据不足。")),emptyList(),listOf(Metric("appMs",20*minute,"ms","已观察应用活动"),Metric("mediaMs",35*minute,"ms","媒体播放"),Metric("steps",4280,"步","健康来源聚合步数"),Metric("photos",null,"张","关联图片")),episodes,warnings=listOf("演示：所有地点与活动均为虚构，不会混入实际记录。"))
-        mutable.update { it.copy(demo=true,day=d) }
+        val zone=mutable.value.policy.archiveZone
+        val today=LocalDate.now(ZoneId.of(zone))
+        mutable.update { it.copy(demo=true,day=demoDay(today,zone),selectedDate=today.toString()) }
     }
+
     override fun onCleared() { mutable.value.inspection?.directory?.deleteRecursively();super.onCleared() }
 }

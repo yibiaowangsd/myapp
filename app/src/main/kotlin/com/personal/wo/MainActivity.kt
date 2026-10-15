@@ -27,8 +27,14 @@ class MainActivity:ComponentActivity() {
     private val unlocked=mutableStateOf(false)
     private var stoppedAt=0L
     private var prompt:CancellationSignal?=null
-    private val permissions=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { if(::vm.isInitialized)vm.refresh(true) }
-    private val health=registerForActivityResult(OptionalHealthPermissionContract()) { if(::vm.isInitialized)vm.refresh(true) }
+    private val permissions=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if(::vm.isInitialized) {
+            vm.permissionsChanged()
+            vm.message(if(result.values.any{it})"权限已更新，可继续选择其他来源" else "本次未开启权限，你可以跳过或稍后调整")
+        }
+    }
+    private val health=registerForActivityResult(OptionalHealthPermissionContract()) { if(::vm.isInitialized)vm.permissionsChanged() }
+    private val settingsResult=registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { if(::vm.isInitialized)vm.permissionsChanged() }
     private val archive=registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> uri?.let { vm.export(it,true) } }
     private val summary=registerForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri -> uri?.let { vm.export(it,false) } }
     private val summaryJson=registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let { vm.export(it,false,true) } }
@@ -74,7 +80,7 @@ class MainActivity:ComponentActivity() {
             override fun onAuthenticationSucceeded(result:BiometricPrompt.AuthenticationResult) { unlocked.value=true;prompt=null }
         })
     }
-    private fun background() { runCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:$packageName"))) }.onFailure { vm.message("请在系统应用设置中将定位设为始终允许") } }
+    private fun background() { runCatching { settingsResult.launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:$packageName"))) }.onFailure { vm.message("请在系统应用设置中将定位设为始终允许") } }
     private fun authorize(source:Source) {
         val ordinary=when(source) {
             Source.LOCATION->arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION)
@@ -84,10 +90,36 @@ class MainActivity:ComponentActivity() {
             else->emptyArray()
         }
         if(source==Source.HEALTH) { recoverableCall { health.launch(Capabilities.healthPermissions()) }.onFailure { vm.message("此设备没有可用的Health Connect授权入口") };return }
-        if(ordinary.isNotEmpty()) { permissions.launch(ordinary);return }
-        runCatching { startActivity(Capabilities.special(this,source)) }.onFailure { vm.message("系统没有提供此授权入口，请使用应用设置") }
+        if(ordinary.isNotEmpty()) {
+            val asked=getSharedPreferences("permission_requests",MODE_PRIVATE)
+            val missing=ordinary.filterNot { Capabilities.granted(this,it) }
+            val ready=if(source==Source.LOCATION)Capabilities.location(this) else missing.isEmpty()
+            val blocked=missing.any { asked.getBoolean(it,false)&&!shouldShowRequestPermissionRationale(it) }
+            if(ready||blocked) {
+                runCatching { settingsResult.launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:$packageName"))) }
+                    .onFailure { vm.message("请在系统设置中打开“我”的应用权限") }
+            } else {
+                asked.edit().apply { ordinary.forEach { putBoolean(it,true) } }.apply()
+                recoverableCall { permissions.launch(ordinary) }.onFailure { vm.message("权限页面暂时无法打开，请稍后重试") }
+            }
+            return
+        }
+        runCatching { settingsResult.launch(Capabilities.special(this,source)) }.onFailure { vm.message("系统没有提供此授权入口，请使用应用设置") }
     }
-    fun requestStatusNotification() { if(Build.VERSION.SDK_INT>=33)permissions.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS)) }
+    fun requestStatusNotification() {
+        val permission=Manifest.permission.POST_NOTIFICATIONS
+        val asked=getSharedPreferences("permission_requests",MODE_PRIVATE)
+        val canRequest=Build.VERSION.SDK_INT>=33&&!Capabilities.granted(this,permission)&&
+            (!asked.getBoolean(permission,false)||shouldShowRequestPermissionRationale(permission))
+        recoverableCall {
+            if(canRequest) {
+                asked.edit().putBoolean(permission,true).apply()
+                permissions.launch(arrayOf(permission))
+            } else {
+                settingsResult.launch(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName))
+            }
+        }.onFailure { vm.message("请在系统通知设置中查看“我”的记录状态通知") }
+    }
     fun requestHealthBackground() { wo().scope.launch { runCatching {
         val client=androidx.health.connect.client.HealthConnectClient.getOrCreate(this@MainActivity)
         if(client.features.getFeatureStatus(androidx.health.connect.client.HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND)==androidx.health.connect.client.HealthConnectFeatures.FEATURE_STATUS_AVAILABLE) {

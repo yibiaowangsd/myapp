@@ -25,10 +25,10 @@ import java.time.*
 @Composable fun HistoryPage(s:WoUiState,onDate:(LocalDate)->Unit) {
     var monthString by rememberSaveable{mutableStateOf(YearMonth.now().toString())};val month=YearMonth.parse(monthString);val records=s.history.associateBy{it.dayDate};val offset=month.atDay(1).dayOfWeek.value-1
     LazyColumn(contentPadding=PaddingValues(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-        item{Text("回看每一天",style=MaterialTheme.typography.headlineLarge);Muted("从日期进入记录，过去的片段也可以溯源和修正。",Modifier.padding(top=10.dp))}
+        item{Text("把日子，一页页翻回来",style=MaterialTheme.typography.headlineLarge);Muted("点一个日期，重温那天留下的片段。",Modifier.padding(top=10.dp))}
         item{Paper{
             Row(verticalAlignment=Alignment.CenterVertically){TextButton(onClick={monthString=month.minusMonths(1).toString()}){Text("上月")};Text("${month.year}年${month.monthValue}月",Modifier.weight(1f));TextButton(onClick={monthString=month.plusMonths(1).toString()}){Text("下月")}}
-            BoxWithConstraints{val cell=maxOf(48f,maxWidth.value/7).dp;Column(Modifier.horizontalScroll(rememberScrollState())){
+            BoxWithConstraints{val cell=(maxWidth.value/7).dp;Column{
                 Row{listOf("一","二","三","四","五","六","日").forEach{Box(Modifier.width(cell).padding(vertical=8.dp),contentAlignment=Alignment.Center){Muted(it)}}}
                 for(week in 0 until (offset+month.lengthOfMonth()+6)/7)Row{
                     for(day in 0..6){val number=week*7+day-offset+1
@@ -60,8 +60,9 @@ import java.time.*
 }
 @Composable fun InsightPage(s:WoUiState){
     LazyColumn(verticalArrangement=Arrangement.spacedBy(12.dp),contentPadding=PaddingValues(bottom=24.dp)){
-        item{Text("慢慢看见规律",style=MaterialTheme.typography.headlineLarge);Muted("描述有依据的变化，不给一天打分。",Modifier.padding(top=12.dp,bottom=16.dp))}
-        if(s.insights.isEmpty())item{Empty("记录积累中","比较最近7天与此前28天内的同类日期。至少需要4个近期有效日期、10个基准有效日期，且对应来源在线覆盖达到80%。")}
+        item{Text("最近的生活节奏",style=MaterialTheme.typography.headlineLarge);Muted("描述有依据的变化，不给一天打分。",Modifier.padding(top=12.dp,bottom=16.dp))}
+        item{WeeklyUsageCard(s.history,s.policy.archiveZone)}
+        if(s.insights.isEmpty())item{Empty("再多记录几天","这里会在数据足够时，展示手机使用和活动的变化。先从下面的最近一周开始。")}
         items(s.insights){i->Paper{Text(i.title,style=MaterialTheme.typography.titleLarge);Muted(i.detail)}}
         item{Section("已积累的日期");Paper{Text("${s.history.count{it.episodes.isNotEmpty()}}天",style=MaterialTheme.typography.headlineLarge);Muted("这是存在片段的日期数，不代表全天完整覆盖。")}}
     }
@@ -87,22 +88,13 @@ import java.time.*
     var endpoint by rememberSaveable{mutableStateOf("")};var model by rememberSaveable{mutableStateOf("")};var apiKey by remember{mutableStateOf("")}
     LazyColumn(verticalArrangement=Arrangement.spacedBy(12.dp),contentPadding=PaddingValues(bottom=28.dp)){
         item{Text(if(setup)"一次配置，自动整理" else "记录由你掌握",style=MaterialTheme.typography.headlineLarge);Muted("默认在手机本地处理。后台使用低功耗来源，不持续录音、录像或截屏。",Modifier.padding(top=12.dp))}
-        item{Paper{Text(if(s.policy.paused)"记录已暂停" else if(s.policy.requested)"自动整理已开启" else "记录尚未开启",style=MaterialTheme.typography.titleLarge);Muted("开始后有一条静默状态通知。重启后点击通知继续位置与计步记录；强停期间部分数据无法补回。");FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){Button(onClick={(context as? MainActivity)?.requestStatusNotification();vm.recording(if(!s.policy.requested)"start" else if(s.policy.paused)"resume" else "pause")}){Text(if(!s.policy.requested)"开始记录" else if(s.policy.paused)"继续记录" else "暂停记录")};if(s.policy.requested)TextButton(onClick={vm.recording("stop")}){Text("停止记录")};TextButton(onClick={vm.refresh()}){Text("同步来源")}}}}
-        item{Section("数据来源")}
-        items(s.sources,key={it.source}){source->Paper{
-            Row(verticalAlignment=Alignment.CenterVertically){Text(Capabilities.sourceName(source.source),Modifier.weight(1f),fontSize=19.sp);Switch(source.source in s.policy.enabledSources,{vm.source(source.source,it)})}
-            Muted(if(!source.supported)"设备未提供此能力" else when(source.authorization){"GRANTED"->"已授权";"PARTIAL"->"部分授权";else->"等待授权"});Muted(source.detail)
-            source.lastSuccessMs?.let{Muted("最近成功：${clock(it,s.policy.archiveZone)} · ${if(source.freshness=="NO_DATA")"成功查询但暂无数据" else "已取得来源记录"}")}
-            if(source.supported)TextButton(onClick={authorize(source.source)}){Text(if(source.authorization=="DENIED")"授权此来源" else "查看或调整授权")}
-            if(source.source==Source.LOCATION)TextButton(onClick=background){Text("设置后台定位权限")}
-            if(source.source==Source.HEALTH&&source.supported)TextButton(onClick={(context as? MainActivity)?.requestHealthBackground()}){Text("授权健康后台读取")}
-        }}
+        item{Paper{Text(if(s.policy.paused)"记录已暂停" else if(s.policy.requested)"自动整理已开启" else "记录尚未开启",style=MaterialTheme.typography.titleLarge);Muted("开始后有一条静默状态通知。重启后点击通知继续位置与计步记录；强停期间部分数据无法补回。");FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){Button(onClick={vm.recording(if(!s.policy.requested)"start" else if(s.policy.paused)"resume" else "pause")}){Text(if(!s.policy.requested)"开始记录" else if(s.policy.paused)"继续记录" else "暂停记录")};if(s.policy.requested)TextButton(onClick={vm.recording("stop")}){Text("停止记录")};TextButton(onClick={vm.refresh()}){Text("同步来源")}}}}
         item{Section("通知与排除");Paper{Muted("只有本人选定的应用才保存经过脱敏的必要通知正文并解析线索。其他应用只保留元数据。请输入应用包名，每行一个。");OutlinedTextField(notices,{notices=it},Modifier.fillMaxWidth(),label={Text("通知解析允许的包名")},minLines=2);TextButton(onClick={vm.noticeApps(notices.lines().toSet())}){Text("保存通知来源")};OutlinedTextField(excluded,{excluded=it},Modifier.fillMaxWidth(),label={Text("排除的应用包名")},minLines=2);TextButton(onClick={vm.excludeApps(excluded.lines().toSet())}){Text("保存应用排除")};TextButton(onClick={timeExclude=true}){Text("排除指定时段")};Muted("暂停、停止和删除的范围，历史补采也不会越过。")}}
         item{Section("隐私与归档");Paper{Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("查看时验证身份");Muted("离开超过60秒后，使用系统锁屏凭据或生物识别")};Switch(s.policy.lockUi,lock)};Muted("归档时区：${s.policy.archiveZone}");Muted("数据库加密，本机密钥保护。系统自动备份与迁移已排除。");Muted("数据库约${"%.1f".format(s.databaseBytes/1024.0/1024)}MB。原始位置与应用事件保留30天，通知正文7天。")}}
         item{Section("导出与恢复");Paper{Muted("日摘要是可读副本，默认去除通知正文、精确坐标与图片引用。完整备份采用流式认证加密，恢复码需单独保存；不包含照片原图。");FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedButton(onClick={export("md")}){Text("导出日摘要")};OutlinedButton(onClick={export("json")}){Text("导出日JSON")};Button(onClick={export("archive")}){Text("加密完整备份")};TextButton(onClick={export("restore")}){Text("从备份恢复")}}}}
         item{Section("资源与运行状态");Paper{Muted("低电与高温自动降频。GNSS每次最多20秒，每小时120秒、每天600秒；没有永久唤醒锁。");TextButton(onClick={runCatching{context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}}){Text("打开系统应用设置")};s.diagnostics.take(10).forEach{Muted(it)};Muted("耗电、后台稳定性与准确性需在目标手机上实际测量。")}}
         if(BuildConfig.ENHANCED)item{Section("可选摘要增强");Paper{Muted("仅发送已有结构化事实，让端点返回事实ID顺序。本地生成文字；每天最多3次。HTTPS端点协议见源码说明。");OutlinedTextField(endpoint,{endpoint=it},Modifier.fillMaxWidth(),label={Text("HTTPS事实整理端点")});OutlinedTextField(model,{model=it},Modifier.fillMaxWidth(),label={Text("模型标识（可选）")});OutlinedTextField(apiKey,{apiKey=it},Modifier.fillMaxWidth(),label={Text("访问密钥（留空沿用已保存密钥）")},visualTransformation=androidx.compose.ui.text.input.PasswordVisualTransformation());TextButton(onClick={vm.enhancedConfig(endpoint,model,apiKey);apiKey=""}){Text("保存增强配置")};Button(onClick=vm::enhance){Text("整理当前摘要顺序")}}}
-        item{TextButton(onClick={delete=true}){Text("删除当前查看日期的全部数据",color=MaterialTheme.colorScheme.error)};Muted("我 · Android 1.0.0 · 本人使用")}
+        item{TextButton(onClick={delete=true}){Text("删除当前查看日期的全部数据",color=MaterialTheme.colorScheme.error)};Muted("我 · ${BuildConfig.VERSION_NAME} · 本人使用")}
     }
     if(delete)AlertDialog(onDismissRequest={delete=false},title={Text("删除${s.day?.dayDate}的记录")},text={Text("包括${s.day?.episodes?.size ?: 0}个片段及关联观察、摘要与索引。此日期不会在后续补采中重新导入。")},confirmButton={TextButton(onClick={vm.deleteDay();delete=false}){Text("删除这一天")}},dismissButton={TextButton(onClick={delete=false}){Text("取消")}})
     if(timeExclude)AlertDialog(onDismissRequest={timeExclude=false},title={Text("排除${s.selectedDate}的时段")},text={Column{OutlinedTextField(fromTime,{fromTime=it},label={Text("开始 HH:mm")});OutlinedTextField(toTime,{toTime=it},label={Text("结束 HH:mm")});Muted("现有原始记录保留，但此范围不参与整理和补采；要移除原始记录请使用删除。")}},confirmButton={TextButton(onClick={runCatching{val date=LocalDate.parse(s.selectedDate);val zone=ZoneId.of(s.policy.archiveZone);val a=date.atTime(LocalTime.parse(fromTime)).atZone(zone).toInstant().toEpochMilli();val b=date.atTime(LocalTime.parse(toTime)).atZone(zone).toInstant().toEpochMilli();require(b>a);vm.excludeRange(a,b);timeExclude=false}.onFailure{vm.message("请输入有效时段，结束应晚于开始")}}){Text("保存排除")}},dismissButton={TextButton(onClick={timeExclude=false}){Text("取消")}})

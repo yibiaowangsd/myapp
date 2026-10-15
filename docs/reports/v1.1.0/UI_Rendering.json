@@ -1,0 +1,16 @@
+{
+  "renderer": "Robolectric API 35 native graphics; production Compose components; Android View.draw/Skia",
+  "images": [
+    "01-welcome.png",
+    "02-permissions.png",
+    "03-today.png",
+    "04-visuals.png",
+    "05-empty.png",
+    "06-large-text.png",
+    "07-dark.png",
+    "08-timeline.png",
+    "09-history.png",
+    "10-me.png"
+  ],
+  "scope": "Components, controlled state and interactions; no real device/system settings"
+}

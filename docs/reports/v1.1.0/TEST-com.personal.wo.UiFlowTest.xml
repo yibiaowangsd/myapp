@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.UiFlowTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-15T05:46:19.913Z" hostname="4d93ee73a0a1" time="9.563">
+  <properties/>
+  <testcase name="timelineFiltersAndOpensAnEpisode" classname="com.personal.wo.UiFlowTest" time="6.95"/>
+  <testcase name="narrowScreenAndLargeTextKeepSetupAccessible" classname="com.personal.wo.UiFlowTest" time="0.465"/>
+  <testcase name="mePageKeepsPermissionsAndPrivacyReachable" classname="com.personal.wo.UiFlowTest" time="0.264"/>
+  <testcase name="emptyDashboardOffersSetupAndDoesNotInventMeasurements" classname="com.personal.wo.UiFlowTest" time="0.22"/>
+  <testcase name="dashboardShowsActualDataAndScrollableVisuals" classname="com.personal.wo.UiFlowTest" time="0.532"/>
+  <testcase name="permissionsRequireAnExplicitConfirmationAndAllowSkipping" classname="com.personal.wo.UiFlowTest" time="0.609"/>
+  <testcase name="historyCalendarOpensSelectedDate" classname="com.personal.wo.UiFlowTest" time="0.3"/>
+  <testcase name="darkDashboardRendersAndExitsDemo" classname="com.personal.wo.UiFlowTest" time="0.222"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[[Robolectric] WARN: Android SDK 36 requires Java 21 (have Java 17). Tests won't be run on SDK 36 unless explicitly requested.
+]]></system-err>
+</testsuite>
