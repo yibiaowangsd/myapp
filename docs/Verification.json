@@ -1,7 +1,7 @@
 {
-  "date": "2026-10-15T21:00:50.732838+08:00",
-  "version": "1.4.0",
-  "versionCode": 8,
+  "date": "2026-10-16T03:12:00.782135+08:00",
+  "version": "1.5.0",
+  "versionCode": 9,
   "package": "com.personal.wo",
   "databaseVersion": 1,
   "build": "PASS",
@@ -13,7 +13,15 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:52:24.370Z"
+      "timestamp": "2026-10-15T18:59:48.955Z"
+    },
+    {
+      "name": "com.personal.wo.core.DayChaptersTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T18:59:49.011Z"
     },
     {
       "name": "com.personal.wo.core.DayMomentsTest",
@@ -21,7 +29,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:52:24.455Z"
+      "timestamp": "2026-10-15T18:59:49.022Z"
     },
     {
       "name": "com.personal.wo.core.DayPresentationTest",
@@ -29,7 +37,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:52:24.466Z"
+      "timestamp": "2026-10-15T18:59:49.026Z"
     },
     {
       "name": "com.personal.wo.core.EngineTest",
@@ -37,7 +45,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:52:24.487Z"
+      "timestamp": "2026-10-15T18:59:49.037Z"
     },
     {
       "name": "com.personal.wo.core.StepReadingsTest",
@@ -45,7 +53,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:52:24.565Z"
+      "timestamp": "2026-10-15T18:59:49.088Z"
     },
     {
       "name": "com.personal.wo.core.StreamingCryptoTest",
@@ -53,7 +61,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:52:24.568Z"
+      "timestamp": "2026-10-15T18:59:49.091Z"
     },
     {
       "name": "com.personal.wo.CollectionEfficiencyTest",
@@ -61,7 +69,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:53:36.909Z"
+      "timestamp": "2026-10-15T19:00:37.356Z"
     },
     {
       "name": "com.personal.wo.DatabaseOpenCallbackTest",
@@ -69,15 +77,15 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:53:36.954Z"
+      "timestamp": "2026-10-15T19:00:37.420Z"
     },
     {
       "name": "com.personal.wo.DayDrumUiTest",
-      "tests": "8",
+      "tests": "13",
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:53:27.200Z"
+      "timestamp": "2026-10-15T19:00:37.740Z"
     },
     {
       "name": "com.personal.wo.DirectPermissionPlanTest",
@@ -85,7 +93,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:53:36.968Z"
+      "timestamp": "2026-10-15T19:00:48.823Z"
     },
     {
       "name": "com.personal.wo.StartupRecoveryTest",
@@ -93,7 +101,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:53:36.975Z"
+      "timestamp": "2026-10-15T19:00:48.825Z"
     },
     {
       "name": "com.personal.wo.StepSensorsTest",
@@ -101,7 +109,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:53:36.985Z"
+      "timestamp": "2026-10-15T19:00:48.832Z"
     },
     {
       "name": "com.personal.wo.UiFlowTest",
@@ -109,12 +117,24 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-15T12:53:37.015Z"
+      "timestamp": "2026-10-15T19:00:48.855Z"
     }
   ],
-  "testCount": 107,
+  "testCount": 120,
+  "lint": [
+    {
+      "flavor": "personalOffline",
+      "errors": 0,
+      "warnings": 31
+    },
+    {
+      "flavor": "personalEnhanced",
+      "errors": 0,
+      "warnings": 31
+    }
+  ],
   "lintErrors": 0,
-  "uiRendering": "Robolectric API 35 native graphics; production Compose components; Android View.draw/Skia",
+  "uiRendering": "Robolectric API 35 native graphics; production Compose; Android View.draw/Skia; synthetic labeled image fixtures",
   "uiImages": [
     "01-permissions.png",
     "02-photo-timeline.png",
@@ -137,15 +157,20 @@
     "19-hour-detail.png",
     "20-recap-large-dark.png",
     "21-chart-large-dark.png",
-    "22-drum-home.png",
-    "23-drum-photo.png",
-    "24-drum-return.png",
-    "25-drum-empty.png",
-    "26-drum-large-dark.png",
+    "22-chapter-home.png",
+    "23-chapter-middle.png",
+    "24-both-sides-visible.png",
+    "25-chapter-empty.png",
+    "26-chapter-large-dark.png",
     "27-separate-statistics.png",
-    "28-drum-depth.png",
-    "29-drum-landscape.png"
+    "28-chapter-depth-left.png",
+    "29-chapter-landscape.png",
+    "30-chapter-calendar.png",
+    "31-chapter-filter.png",
+    "32-chapter-details.png",
+    "33-chapter-depth-right.png"
   ],
+  "depthFrames": 25,
   "smallScreen": {
     "widthDp": 360,
     "heightDp": 800,
@@ -155,21 +180,37 @@
   "huaweiPermissionScreens": "NOT_DEVICE_TESTED",
   "apks": [
     {
-      "apk": "Wo_Android_v1.4.0_Offline.apk",
-      "sha256": "8fb48e7f2d337cd4d7ea2e17ac9885c5d0df3e07e1644ee9c54ae485484d7920",
-      "sizeBytes": 9095509,
+      "apk": "Wo_Android_v1.5.0_Offline.apk",
+      "sizeBytes": 9466293,
+      "sha256": "335fb78dc5adc2ff7de47c9d62e4b3aeac7714e83570f07aa84645d57643fa3e",
       "hasInternet": false,
       "staticChecks": "PASS"
     },
     {
-      "apk": "Wo_Android_v1.4.0_Enhanced.apk",
-      "sha256": "47d0b3d7558959c11e096e0ad2843fde67003b869f614efd962fb7849ddb863c",
-      "sizeBytes": 9177453,
+      "apk": "Wo_Android_v1.5.0_Enhanced.apk",
+      "sizeBytes": 9531853,
+      "sha256": "8b685120c4ba490b7eb24b620b7cb8bb2eda4f3775a9d9cf1240d2bef8cf816b",
       "hasInternet": true,
       "staticChecks": "PASS"
     }
   ],
   "r8MappingVerified": true,
-  "previousStartupFix": "DatabaseOpenCallback query + consumed and closed cursor retained",
-  "signatureContinuity": true
+  "r8Maps": [
+    {
+      "variant": "personalOffline",
+      "mapHash": "03cbbe14129e1dea25e7161b958f0b2b3c49b1655df91d96b541564a5e1b7e83",
+      "mappingFileSha256": "f9a73432cc7afd81f5dd977d7ce204b6d27887f45051096d2ab4df0b719b4150",
+      "apkSha256": "335fb78dc5adc2ff7de47c9d62e4b3aeac7714e83570f07aa84645d57643fa3e"
+    },
+    {
+      "variant": "personalEnhanced",
+      "mapHash": "e993b8cacecd5ab1c6afce77a68008610f64cfe1701687017501047089ee5bd7",
+      "mappingFileSha256": "a288d4bd52da29bc5638fa63ccca3c252584981d2babed5fed36742b13ade8d2",
+      "apkSha256": "8b685120c4ba490b7eb24b620b7cb8bb2eda4f3775a9d9cf1240d2bef8cf816b"
+    }
+  ],
+  "signatureContinuity": true,
+  "signerSha256": "c9b24de261dc30ebbc92da22f3f7826beb2c3015141c7b43d63b1ca27de9cb58",
+  "sourceInputsSha256": "10c75f6e495db96432b51bcc7f92942281a8164cf7e5080eef95979fb09df0f9",
+  "previousStartupFix": "DatabaseOpenCallback query + consumed and closed cursor retained"
 }

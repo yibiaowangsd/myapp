@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.DayDrumUiTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-15T19:00:37.740Z" hostname="62873a7a8612" time="11.082">
+  <properties/>
+  <testcase name="homeGroupsPeriodsAndOpensStatisticsExplicitly" classname="com.personal.wo.DayDrumUiTest" time="5.598"/>
+  <testcase name="landscapeKeepsPeriodAndTimeControlsVisible" classname="com.personal.wo.DayDrumUiTest" time="0.352"/>
+  <testcase name="narrowDarkLargeTypeStillRotatesAndOpensStats" classname="com.personal.wo.DayDrumUiTest" time="0.33"/>
+  <testcase name="thresholdChoiceDoesNotChangePageOrRemoveRawDetails" classname="com.personal.wo.DayDrumUiTest" time="0.395"/>
+  <testcase name="bothSideFacesAreActuallyDrawnAtMiddleAndPoseIsSymmetric" classname="com.personal.wo.DayDrumUiTest" time="0.295"/>
+  <testcase name="dateEdgesCalendarAndTodayAreReachable" classname="com.personal.wo.DayDrumUiTest" time="0.633"/>
+  <testcase name="loadingHistoricalDateDoesNotShowPreviousDaysRecords" classname="com.personal.wo.DayDrumUiTest" time="0.077"/>
+  <testcase name="horizontalGestureAndScrubbingOpenWholePeriod" classname="com.personal.wo.DayDrumUiTest" time="0.358"/>
+  <testcase name="emptyHistoricalDayKeepsDateControlsWithoutInventingRecords" classname="com.personal.wo.DayDrumUiTest" time="0.147"/>
+  <testcase name="restoreAndDynamicPartsPreserveTheSelectedPeriod" classname="com.personal.wo.DayDrumUiTest" time="0.242"/>
+  <testcase name="cylinderHasDepthFramesInBothDirections" classname="com.personal.wo.DayDrumUiTest" time="2.275"/>
+  <testcase name="statsPageKeepsChartsAndEpisodeDetailsReachable" classname="com.personal.wo.DayDrumUiTest" time="0.189"/>
+  <testcase name="detailsShowAllImagesAndShortUsageAndOpenOriginalEvidence" classname="com.personal.wo.DayDrumUiTest" time="0.19"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[[Robolectric] WARN: Android SDK 36 requires Java 21 (have Java 17). Tests won't be run on SDK 36 unless explicitly requested.
+]]></system-err>
+</testsuite>

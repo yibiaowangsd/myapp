@@ -22,11 +22,13 @@ data class WoUiState(
     val insights:List<Insight> = emptyList(),val recoveryCode:String?=null,val inspection:RestoreInspection?=null,
     val selectedDate:String=LocalDate.now().toString(),val demo:Boolean=false,val databaseBytes:Long=0,
     val diagnostics:List<String> = emptyList(),val positions:List<Observation> = emptyList(),
-    val apps:List<ConnectedApp> = emptyList(),val appsLoaded:Boolean=false
+    val apps:List<ConnectedApp> = emptyList(),val appsLoaded:Boolean=false,
+    val homeAppMinMinutes:Int=10
 )
 class WoViewModel(application:Application):AndroidViewModel(application) {
     private val app=application as WoApplication
-    private val mutable=MutableStateFlow(WoUiState())
+    private val uiPreferences=application.getSharedPreferences("ui_preferences",0)
+    private val mutable=MutableStateFlow(WoUiState(homeAppMinMinutes=checkedHomeAppMinutes(uiPreferences.getInt("home_app_minutes",10))))
     val state=mutable.asStateFlow()
     private var loadJob:Job?=null
     private var searchJob:Job?=null
@@ -80,7 +82,16 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         refresh(true,false)
     }
     fun background() { visible=false;loadJob?.cancel();searchJob?.cancel();foregroundJob?.cancel() }
-    fun date(date:LocalDate) { mutable.update { it.copy(selectedDate=date.toString(),demo=false) };refresh(false) }
+    fun date(date:LocalDate) {
+        val today=LocalDate.now(ZoneId.of(mutable.value.policy.archiveZone))
+        val target=minOf(date,today)
+        mutable.update { it.copy(selectedDate=target.toString(),demo=false) };refresh(false)
+    }
+    fun homeAppMinutes(value:Int) {
+        val checked=checkedHomeAppMinutes(value)
+        uiPreferences.edit().putInt("home_app_minutes",checked).apply()
+        mutable.update { it.copy(homeAppMinMinutes=checked) }
+    }
     fun message(value:String?) { mutable.update { it.copy(message=value) } }
     private fun action(block:suspend(Graph)->Unit) { viewModelScope.launch(Dispatchers.IO) {
         mutable.update { it.copy(busy=true) }

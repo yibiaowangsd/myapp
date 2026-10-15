@@ -23,17 +23,18 @@ import com.personal.wo.collector.Capabilities
 import java.time.*
 
 @Composable fun HistoryPage(s:WoUiState,onDate:(LocalDate)->Unit) {
-    var monthString by rememberSaveable{mutableStateOf(YearMonth.now().toString())};val month=YearMonth.parse(monthString);val records=s.history.associateBy{it.dayDate};val offset=month.atDay(1).dayOfWeek.value-1
+    val today=LocalDate.now(ZoneId.of(s.policy.archiveZone))
+    var monthString by rememberSaveable{mutableStateOf(YearMonth.from(LocalDate.parse(s.selectedDate)).toString())};val month=YearMonth.parse(monthString);val records=s.history.associateBy{it.dayDate};val offset=month.atDay(1).dayOfWeek.value-1
     LazyColumn(contentPadding=PaddingValues(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
         item{Text("把日子，一页页翻回来",style=MaterialTheme.typography.headlineLarge);Muted("点一个日期，重温那天留下的片段。",Modifier.padding(top=10.dp))}
         item{Paper{
-            Row(verticalAlignment=Alignment.CenterVertically){TextButton(onClick={monthString=month.minusMonths(1).toString()}){Text("上月")};Text("${month.year}年${month.monthValue}月",Modifier.weight(1f));TextButton(onClick={monthString=month.plusMonths(1).toString()}){Text("下月")}}
+            Row(verticalAlignment=Alignment.CenterVertically){TextButton(onClick={monthString=month.minusMonths(1).toString()}){Text("上月")};Text("${month.year}年${month.monthValue}月",Modifier.weight(1f));TextButton(onClick={monthString=month.plusMonths(1).toString()},enabled=month<YearMonth.from(today)){Text("下月")}}
             BoxWithConstraints{val cell=(maxWidth.value/7).dp;Column{
                 Row{listOf("一","二","三","四","五","六","日").forEach{Box(Modifier.width(cell).padding(vertical=8.dp),contentAlignment=Alignment.Center){Muted(it)}}}
                 for(week in 0 until (offset+month.lengthOfMonth()+6)/7)Row{
                     for(day in 0..6){val number=week*7+day-offset+1
                         if(number in 1..month.lengthOfMonth()){val date=month.atDay(number);val recorded=records.containsKey(date.toString())
-                            Column(Modifier.width(cell).heightIn(min=52.dp).clip(RoundedCornerShape(12.dp)).background(if(date.toString()==s.selectedDate)MaterialTheme.colorScheme.surfaceVariant else Color.Transparent).clickable{onDate(date)}.padding(vertical=8.dp),horizontalAlignment=Alignment.CenterHorizontally){Text(number.toString());Text(if(recorded)"·" else "",color=MaterialTheme.colorScheme.primary)}
+                            Column(Modifier.width(cell).heightIn(min=52.dp).clip(RoundedCornerShape(12.dp)).background(if(date.toString()==s.selectedDate)MaterialTheme.colorScheme.surfaceVariant else Color.Transparent).clickable(enabled=date<=today){onDate(date)}.padding(vertical=8.dp),horizontalAlignment=Alignment.CenterHorizontally){Text(number.toString(),color=MaterialTheme.colorScheme.onSurface.copy(alpha=if(date<=today)1f else .35f));Text(if(recorded)"·" else "",color=MaterialTheme.colorScheme.primary)}
                         }else Spacer(Modifier.width(cell).height(52.dp))
                     }
                 }

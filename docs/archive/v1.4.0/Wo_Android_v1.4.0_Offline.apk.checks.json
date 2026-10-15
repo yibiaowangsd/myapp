@@ -1,0 +1,45 @@
+{
+  "apk": "Wo_Android_v1.4.0_Offline.apk",
+  "sizeBytes": 9095509,
+  "sha256": "8fb48e7f2d337cd4d7ea2e17ac9885c5d0df3e07e1644ee9c54ae485484d7920",
+  "hasInternet": false,
+  "signature": [
+    "Verifies",
+    "Verified using v1 scheme (JAR signing): false",
+    "Verified using v2 scheme (APK Signature Scheme v2): true",
+    "Verified using v3 scheme (APK Signature Scheme v3): false",
+    "Verified using v3.1 scheme (APK Signature Scheme v3.1): false",
+    "Verified using v4 scheme (APK Signature Scheme v4): false",
+    "Verified for SourceStamp: false",
+    "Number of signers: 1",
+    "Signer #1 certificate DN: CN=Wo Personal Android, O=Personal, C=CN",
+    "Signer #1 certificate SHA-256 digest: c9b24de261dc30ebbc92da22f3f7826beb2c3015141c7b43d63b1ca27de9cb58",
+    "Signer #1 certificate SHA-1 digest: fc098dfea60e802924def7b5b199310dc649479a",
+    "Signer #1 certificate MD5 digest: 2297613c4d12f09a35fff1fc11b4c6c7",
+    "Signer #1 key algorithm: RSA",
+    "Signer #1 key size (bits): 3072",
+    "Signer #1 public key SHA-256 digest: 11ac98b24ef6ab4d03efd7b0134493702989dc5639db07f37276acf975d8d01c",
+    "Signer #1 public key SHA-1 digest: 6fc93d7b12878d24b36ed664b46d22f377febcaf",
+    "Signer #1 public key MD5 digest: 400e83a4063e05fa008ae58c6d11570e"
+  ],
+  "native": [
+    {
+      "path": "lib/arm64-v8a/libandroidx.graphics.path.so",
+      "pt_load_align": [
+        16384,
+        16384,
+        16384
+      ]
+    },
+    {
+      "path": "lib/arm64-v8a/libsqlcipher.so",
+      "pt_load_align": [
+        16384,
+        16384,
+        16384
+      ]
+    }
+  ],
+  "staticChecks": "PASS",
+  "runtimeDeviceTests": "NOT_RUN"
+}

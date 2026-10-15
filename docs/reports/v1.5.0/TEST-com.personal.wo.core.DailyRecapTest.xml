@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.core.DailyRecapTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-15T18:59:48.955Z" hostname="62873a7a8612" time="0.053">
+  <properties/>
+  <testcase name="sameAppSessionsKeepTheirRealGapAndClipAtCutoff" classname="com.personal.wo.core.DailyRecapTest" time="0.036"/>
+  <testcase name="excludesPlansUncertainEventsAndFutureFromRecap" classname="com.personal.wo.core.DailyRecapTest" time="0.004"/>
+  <testcase name="inferredStaysKeepTheirQualificationAndPhotosKeepTheirClockPart" classname="com.personal.wo.core.DailyRecapTest" time="0.011"/>
+  <testcase name="stepIntervalAcrossNoonIsCountedInOnePartOnly" classname="com.personal.wo.core.DailyRecapTest" time="0.001"/>
+  <testcase name="emptyMeasurementsAreNotInventedAsZero" classname="com.personal.wo.core.DailyRecapTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

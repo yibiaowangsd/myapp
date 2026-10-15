@@ -1,0 +1,175 @@
+{
+  "date": "2026-10-15T21:00:50.732838+08:00",
+  "version": "1.4.0",
+  "versionCode": 8,
+  "package": "com.personal.wo",
+  "databaseVersion": 1,
+  "build": "PASS",
+  "buildExitCode": 0,
+  "tests": [
+    {
+      "name": "com.personal.wo.core.DailyRecapTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:52:24.370Z"
+    },
+    {
+      "name": "com.personal.wo.core.DayMomentsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:52:24.455Z"
+    },
+    {
+      "name": "com.personal.wo.core.DayPresentationTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:52:24.466Z"
+    },
+    {
+      "name": "com.personal.wo.core.EngineTest",
+      "tests": "33",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:52:24.487Z"
+    },
+    {
+      "name": "com.personal.wo.core.StepReadingsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:52:24.565Z"
+    },
+    {
+      "name": "com.personal.wo.core.StreamingCryptoTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:52:24.568Z"
+    },
+    {
+      "name": "com.personal.wo.CollectionEfficiencyTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:53:36.909Z"
+    },
+    {
+      "name": "com.personal.wo.DatabaseOpenCallbackTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:53:36.954Z"
+    },
+    {
+      "name": "com.personal.wo.DayDrumUiTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:53:27.200Z"
+    },
+    {
+      "name": "com.personal.wo.DirectPermissionPlanTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:53:36.968Z"
+    },
+    {
+      "name": "com.personal.wo.StartupRecoveryTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:53:36.975Z"
+    },
+    {
+      "name": "com.personal.wo.StepSensorsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:53:36.985Z"
+    },
+    {
+      "name": "com.personal.wo.UiFlowTest",
+      "tests": "18",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T12:53:37.015Z"
+    }
+  ],
+  "testCount": 107,
+  "lintErrors": 0,
+  "uiRendering": "Robolectric API 35 native graphics; production Compose components; Android View.draw/Skia",
+  "uiImages": [
+    "01-permissions.png",
+    "02-photo-timeline.png",
+    "03-today.png",
+    "04-visuals.png",
+    "05-empty.png",
+    "06-large-text.png",
+    "07-dark.png",
+    "08-timeline.png",
+    "09-history.png",
+    "10-me.png",
+    "11-step-retry.png",
+    "12-timeline-home.png",
+    "13-connections.png",
+    "14-app-connection.png",
+    "15-huawei-status.png",
+    "16-background-help.png",
+    "17-connections-large-dark.png",
+    "18-day-chart.png",
+    "19-hour-detail.png",
+    "20-recap-large-dark.png",
+    "21-chart-large-dark.png",
+    "22-drum-home.png",
+    "23-drum-photo.png",
+    "24-drum-return.png",
+    "25-drum-empty.png",
+    "26-drum-large-dark.png",
+    "27-separate-statistics.png",
+    "28-drum-depth.png",
+    "29-drum-landscape.png"
+  ],
+  "smallScreen": {
+    "widthDp": 360,
+    "heightDp": 800,
+    "fontScale": 1.5
+  },
+  "androidInstrumentation": "4 tests compiled; not run on device",
+  "huaweiPermissionScreens": "NOT_DEVICE_TESTED",
+  "apks": [
+    {
+      "apk": "Wo_Android_v1.4.0_Offline.apk",
+      "sha256": "8fb48e7f2d337cd4d7ea2e17ac9885c5d0df3e07e1644ee9c54ae485484d7920",
+      "sizeBytes": 9095509,
+      "hasInternet": false,
+      "staticChecks": "PASS"
+    },
+    {
+      "apk": "Wo_Android_v1.4.0_Enhanced.apk",
+      "sha256": "47d0b3d7558959c11e096e0ad2843fde67003b869f614efd962fb7849ddb863c",
+      "sizeBytes": 9177453,
+      "hasInternet": true,
+      "staticChecks": "PASS"
+    }
+  ],
+  "r8MappingVerified": true,
+  "previousStartupFix": "DatabaseOpenCallback query + consumed and closed cursor retained",
+  "signatureContinuity": true
+}
