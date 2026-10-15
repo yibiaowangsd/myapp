@@ -1,0 +1,9 @@
+{
+  "sqliteVersion": "3.53.1",
+  "pragmaReturnsRows": true,
+  "timeoutMs": 5000,
+  "recordPreserved": true,
+  "integrity": "ok",
+  "nativeStepResult": 100,
+  "nativeStepResultName": "SQLITE_ROW"
+}

@@ -1,11 +1,20 @@
 {
-  "date": "2026-10-15T09:18:49.527450+08:00",
-  "version": "1.0.1",
-  "versionCode": 2,
+  "date": "2026-10-15T09:41:38.819635+08:00",
+  "version": "1.0.2",
+  "versionCode": 3,
   "package": "com.personal.wo",
   "databaseVersion": 1,
   "build": "PASS",
   "buildExitCode": 0,
+  "rootCause": "CONFIRMED_ROW_RETURNING_BUSY_TIMEOUT_USED_WITH_EXECSQL",
+  "diagnosticMappingMatched": "cbb28332ba9ee297b858cd2b63211d424a935d2a33794c7bc293578db7286263",
+  "originalCallback": "Graph$1.onOpen, WoApplication.kt:65",
+  "regressionBefore": {
+    "tests": 2,
+    "failures": 2,
+    "expected": true,
+    "type": "JVM database interface contract"
+  },
   "unitTests": [
     {
       "suite": "com.personal.wo.core.StreamingCryptoTest",
@@ -73,9 +82,19 @@
         "pauseBarrierStopsContinuity",
         "mediaPauseIsNotPlayback"
       ]
+    },
+    {
+      "suite": "com.personal.wo.DatabaseOpenCallbackTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "cases": [
+        "readingFailureStillClosesTheCursor",
+        "openingConsumesThePragmaResultAndClosesTheCursor"
+      ]
     }
   ],
-  "testCount": 43,
+  "testCount": 45,
   "lint": [
     {
       "report": "lint-results-personalEnhancedDebug.xml",
@@ -90,9 +109,9 @@
   ],
   "apkChecks": [
     {
-      "apk": "Wo_Android_v1.0.1_Offline.apk",
+      "apk": "Wo_Android_v1.0.2_Offline.apk",
       "sizeBytes": 8931193,
-      "sha256": "67f002e15484da8494b2a6eb0bbc22719f7b8f75c747bab4d929f66043c595f0",
+      "sha256": "1c6a6a582d669a98f849fd794d9fa3215239b54d183ad7161c6e6e23671e33d8",
       "hasInternet": false,
       "signature": [
         "Verifies",
@@ -135,9 +154,9 @@
       "runtimeDeviceTests": "NOT_RUN"
     },
     {
-      "apk": "Wo_Android_v1.0.1_Enhanced.apk",
+      "apk": "Wo_Android_v1.0.2_Enhanced.apk",
       "sizeBytes": 8996745,
-      "sha256": "db1fce2560643150b84e9f47ac9f5f0f347a479ca8ad60659556c26b9628f11f",
+      "sha256": "9f8f6009685eb2e8cc7fee0287bb0468ba047f11cd1d29701f89b1a4314be798",
       "hasInternet": true,
       "signature": [
         "Verifies",
@@ -180,13 +199,39 @@
       "runtimeDeviceTests": "NOT_RUN"
     }
   ],
-  "sameSigningCertificateAsV1_0_0": true,
-  "defaultWorkManagerInitializerRemoved": true,
-  "finalListenerFixPresentInBothApks": true,
+  "compiledCallbackChecks": {
+    "Offline": {
+      "queryApi": true,
+      "cursorConsumed": true,
+      "cursorClosed": true,
+      "mappingId": "b1b260d379316444807cf0f277b216ecf026eef7f87a7ce301d4c2a323572027",
+      "sha256": "1c6a6a582d669a98f849fd794d9fa3215239b54d183ad7161c6e6e23671e33d8"
+    },
+    "Enhanced": {
+      "queryApi": true,
+      "cursorConsumed": true,
+      "cursorClosed": true,
+      "mappingId": "418ff4d0b0cef980d4d0426133cf89bcd0eaac99b768f9c34a48d55173f89d00",
+      "sha256": "9f8f6009685eb2e8cc7fee0287bb0468ba047f11cd1d29701f89b1a4314be798"
+    }
+  },
+  "sqlitePragmaChecks": {
+    "sqliteVersion": "3.53.1",
+    "pragmaReturnsRows": true,
+    "timeoutMs": 5000,
+    "recordPreserved": true,
+    "integrity": "ok",
+    "nativeStepResult": 100,
+    "nativeStepResultName": "SQLITE_ROW"
+  },
+  "sameSigningCertificateAsPreviousReleases": true,
   "schema": "PASS:17 entities,unique source key,FTS4,integrity_check",
-  "deviceTests": "NOT_RUN",
-  "HarmonyOS4_2_0DeviceValidation": "NOT_RUN",
-  "deviceSpecificCrashTrigger": "UNCONFIRMED_NO_DEVICE_LOG",
+  "deviceTests": {
+    "count": 4,
+    "compiled": true,
+    "executed": false
+  },
+  "targetDeviceStartup": "AWAITING_USER_INSTALL_VALIDATION",
   "batteryAnd7DayTests": "NOT_RUN",
-  "previousReport": "archive/v1.0.0/Verification.json"
+  "previousReport": "archive/v1.0.1/Verification.json"
 }

@@ -2,7 +2,7 @@
 
 文档更新：2026-10-15（Asia/Shanghai）
 
-对应应用：1.0.1，versionCode 2，`com.personal.wo`
+对应应用：1.0.2，versionCode 3，`com.personal.wo`
 
 状态：首版安装测试工程，尚未完成全部生产发布验收。
 
@@ -127,3 +127,5 @@ Room V1 使用 SQLCipher 加密与 WAL，共 17 个实体，实际导出的结�
 原构建验证时间为 2026-10-15 03:18（+08:00）。35 项领域与流式加密单元测试通过；两个 Release 编译与签名检查通过；两个变体 Lint 0 错误；17 实体 schema、唯一来源键、FTS4 和完整性检查通过；离线包没有 INTERNET；原生 ELF 与 APK 16 KiB 对齐静态检查通过。
 
 3 项 Android 设备测试已编写并编译，尚未执行。真实界面、SQLCipher 设备运行、200% 字体、16 KiB 设备兼容性、日耗电及 7 日稳定性没有设备验收。1.0.1 增加启动错误边界、可选来源隔离、按需后台调度及诊断页，见 [HarmonyOS 启动修复说明](HarmonyOS_4.2.0_Startup_Fix.md)。这些修改不构成 HarmonyOS 真机验收结论；当前构建结果以 Verification.md 为准。
+
+1.0.2 根据实际启动堆栈将数据库打开回调的 busy_timeout 语句改用查询并消费/关闭游标，保留原数据库与密钥。详见 [数据库启动修复](Database_Startup_Fix_1.0.2.md)。

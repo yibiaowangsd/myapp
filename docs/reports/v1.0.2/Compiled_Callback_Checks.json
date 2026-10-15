@@ -1,0 +1,16 @@
+{
+  "Offline": {
+    "queryApi": true,
+    "cursorConsumed": true,
+    "cursorClosed": true,
+    "mappingId": "b1b260d379316444807cf0f277b216ecf026eef7f87a7ce301d4c2a323572027",
+    "sha256": "1c6a6a582d669a98f849fd794d9fa3215239b54d183ad7161c6e6e23671e33d8"
+  },
+  "Enhanced": {
+    "queryApi": true,
+    "cursorConsumed": true,
+    "cursorClosed": true,
+    "mappingId": "418ff4d0b0cef980d4d0426133cf89bcd0eaac99b768f9c34a48d55173f89d00",
+    "sha256": "9f8f6009685eb2e8cc7fee0287bb0468ba047f11cd1d29701f89b1a4314be798"
+  }
+}

@@ -2,9 +2,9 @@
 
 文档更新：2026-10-15（Asia/Shanghai）
 
-对应应用版本：1.0.1；数据库版本：Room V1；包名：`com.personal.wo`。
+对应应用版本：1.0.2；数据库版本：Room V1；包名：`com.personal.wo`。
 
-本仓库包含 1.0.0 基础功能与 1.0.1 启动兼容修复。最新构建结果见 Verification.md，原 1.0.0 验证记录保存在 archive/v1.0.0/。修复范围和实际设备验证边界见 [HarmonyOS 启动修复说明](HarmonyOS_4.2.0_Startup_Fix.md)。
+本仓库包含 1.0.0 基础功能、1.0.1 启动异常处理与 1.0.2 数据库打开回调修复。最新构建结果见 Verification.md，原 1.0.0 验证记录保存在 archive/v1.0.0/。修复范围和实际设备验证边界见 [HarmonyOS 启动修复说明](HarmonyOS_4.2.0_Startup_Fix.md)。
 
 ## 1. 阅读入口
 
@@ -114,6 +114,7 @@ DayEngine 在归档时区内按半开时间区间生成 DayView；数据发生�
 ./gradlew :app:assemblePersonalOfflineDebug :app:assemblePersonalEnhancedDebug
 ./gradlew :app:assemblePersonalOfflineDebugAndroidTest
 python3 scripts/verify_schema.py
+python3 scripts/verify_pragmas.py
 ```
 
 连接 Android 10+ 的测试手机或已正常启动的兼容模拟器后，执行设备测试：
@@ -124,7 +125,7 @@ python3 scripts/verify_schema.py
 
 Debug 支持 arm64-v8a 和 x86_64。标准 APK 输出在 `app/build/outputs/apk/<flavor>/<buildType>/`；本地单元测试报告在 `core/build/test-results/test/`；Lint 报告在 `app/build/reports/`。
 
-当前核心测试 33 项、流式加密测试 2 项，另有 8 项启动恢复回归测试，共 43 项 JVM 测试通过。AndroidTest 3 项覆盖实际 SQLCipher 文件加密、重复/暂停/删除持久性、归档认证失败与恢复往返；只完成编译，尚未执行。`docs/reports/` 保留原构建记录，`docs/reports/v1.0.1/` 保存本次重跑结果；设备测试仍未执行。
+当前核心测试 33 项、流式加密测试 2 项，另有 8 项启动恢复及 2 项数据库回调契约回归测试，共 45 项 JVM 测试通过。AndroidTest 4 项覆盖实际 SQLCipher 文件加密、重复/暂停/删除持久性、归档认证失败与恢复往返、生产回调重新打开保留记录；只完成编译，尚未执行。`docs/reports/` 保留原构建记录，`docs/reports/v1.0.2/` 保存本次重跑结果；设备测试仍未执行。
 
 ## 7. Release 与升级签名
 
@@ -146,7 +147,7 @@ Release 只包含 arm64-v8a，启用 R8 和资源压缩。使用个人签名备�
 静态检查脚本需要 APK 路径和 Android SDK 路径：
 
 ```bash
-python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.0.1_Offline.apk /absolute/path/android-sdk
+python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.0.2_Offline.apk /absolute/path/android-sdk
 ```
 
 脚本检查签名、min/targetSdk、离线 INTERNET 移除、APK zipalign 以及原生 ELF 16 KiB 对齐。它不能替代 16 KiB Android 设备上的运行验证。离线 APK 文件名应含 `Offline` 或 `personalOffline`，因为脚本据此选择网络权限断言。
@@ -191,7 +192,7 @@ python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.0.1_Offline.apk /abs
 | 优先事项 | 完成标准 |
 |---|---|
 | 实际安装与来源授权 | 目标 Android/OEM 上逐项授权、撤销、再次授予；来源状态与缺口符合实际 |
-| 数据库与恢复设备测试 | 运行现有 3 项 AndroidTest；错误恢复码/截断后旧数据仍完整 |
+| 数据库与恢复设备测试 | 运行现有 4 项 AndroidTest；错误恢复码/截断后旧数据仍完整 |
 | 后台与日耗电 | 记录 24 小时对照、熄屏/重启/省电/温度/进程中断及 7 日稳定性结果 |
 | 显示兼容 | 小屏、大字体 200%、深色模式、辅助功能与 16 KiB 系统运行 |
 | 初始化救援恢复 | 密钥/数据库初始化失败时仍能进入独立恢复流程并保留原文件 |
@@ -204,7 +205,7 @@ python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.0.1_Offline.apk /abs
 
 `docs/Source_SHA256.json` 记录除自身外的仓库交付文件 SHA-256，用于比对来源。更新文件后重新生成清单，保留原始设计和历史验证时间；新增验证应明确实际执行日期和环境。
 
-仓库不包含安装包、原始生活数据、恢复码、签名私钥、API 密钥或本机 SDK 配置。个人签名备份需由本人另行保管。1.0.1 提升 versionCode 到 2，复用原 Release 签名与数据库结构，可覆盖升级。
+仓库不包含安装包、原始生活数据、恢复码、签名私钥、API 密钥或本机 SDK 配置。个人签名备份需由本人另行保管。1.0.2 提升 versionCode 到 3，复用原 Release 签名与数据库结构，可覆盖升级。
 
 ## 12. 启动兼容约束
 
@@ -213,3 +214,9 @@ WorkManager 采用 Configuration.Provider 按需初始化，Manifest 只移除�
 初始化、前台恢复及系统监听入口处理 Exception 与 LinkageError；CancellationException 必须继续传播，虚拟机故障不作普通错误吞掉。可选来源按来源分别探测，权限拒绝保留 UNKNOWN 与可授权入口，接口/类确实不可用才标记不支持。Health Connect 权限契约延后到本人授权时创建。
 
 失败诊断独立于数据库，保存在私有 noBackup 目录。不要将原始异常中的业务消息、通知内容、密钥或数据库查询数据写入诊断。重试关闭失败 Graph 的通道与作用域后重新初始化，不清除或迁移原始数据库。
+
+## 13. 返回结果的数据库配置语句
+
+生产 Graph 与 AndroidTest 共用 data/DatabaseOpenCallback.kt。busy_timeout 即使赋值也返回一行，必须通过 query 并读取游标触发执行；execSQL 的更新/删除路径会拒绝结果行。游标统一使用 use 关闭。禁止将这类配置错误通过清库、重建 Keystore 或破坏性 Migration 兜底。
+
+DatabaseOpenCallbackTest 使用严格的数据库接口替身测试生产回调契约；verify_pragmas.py 使用真实宿主 SQLite 验证返回结果。Android SQLCipher 的打开与重开检查位于 DatabaseBackupTest，尚待设备执行。源码与已有数据库版本均保持 V1。

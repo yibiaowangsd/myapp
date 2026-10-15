@@ -1,0 +1,192 @@
+{
+  "date": "2026-10-15T09:18:49.527450+08:00",
+  "version": "1.0.1",
+  "versionCode": 2,
+  "package": "com.personal.wo",
+  "databaseVersion": 1,
+  "build": "PASS",
+  "buildExitCode": 0,
+  "unitTests": [
+    {
+      "suite": "com.personal.wo.core.StreamingCryptoTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "cases": [
+        "fullLargeStreamRoundTripAndAuthentication",
+        "independentRecoveryKeyWrapsKeyset"
+      ]
+    },
+    {
+      "suite": "com.personal.wo.StartupRecoveryTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "cases": [
+        "fatalVmFailureIsNotSilentlyHidden",
+        "nativeLoadFailureDoesNotEscapeTheStartupBoundary",
+        "diagnosticOmitsExceptionMessagesContainingPrivateData",
+        "initializationFailureBecomesAnInspectableResult",
+        "coroutineCancellationIsNotReportedAsADeviceFailure",
+        "deniedSystemProbeDoesNotBecomeAZeroMetric",
+        "disabledProviderIsNeverInitialized",
+        "missingOptionalProviderDoesNotPreventOtherSources"
+      ]
+    },
+    {
+      "suite": "com.personal.wo.core.EngineTest",
+      "tests": 33,
+      "failures": 0,
+      "errors": 0,
+      "cases": [
+        "screenOnDoesNotBypassKnownKeyguard",
+        "correctedFactsRetainUserConfirmation",
+        "malformedArchivePathsAreRejected",
+        "overlapDoesNotInflate",
+        "lockEndsActivity",
+        "intervalsAreHalfOpen",
+        "unknownMetricIsNull",
+        "crossPauseHealthCountIsNotProRated",
+        "mediaRecoveryCannotExtendAnOldSong",
+        "chineseEnglishTokens",
+        "ordinaryPasswordsAreNotPersisted",
+        "stepCounterResetCreatesNewBaseline",
+        "notificationLanguageIsConservative",
+        "offlineRouteUnwrapsDateLine",
+        "healthAggregationDoesNotDoubleHardwareSteps",
+        "daylightSavingWindowHasActualLength",
+        "pauseAndStoppedNotDoubleCounted",
+        "packageActivitySwitchIsMerged",
+        "staleGenerationInputsCanBeExcluded",
+        "unknownTailDoesNotCountAllDay",
+        "videoCannotBeLabeledAsPhoto",
+        "retainedEvidenceStillHonorsDeletionExclusion",
+        "locationGapDoesNotMakeStay",
+        "otpIsRemovedBeforePersistence",
+        "calendarCannotBecomeFact",
+        "oversizedOrUnknownArchiveHeadersAreRejected",
+        "driftRemainsOneStay",
+        "duplicatesAreIdempotent",
+        "crossMidnightKeepsStableId",
+        "screenWithoutKeyguardCanResume",
+        "noScreenInteractionCannotBecomeSleep",
+        "pauseBarrierStopsContinuity",
+        "mediaPauseIsNotPlayback"
+      ]
+    }
+  ],
+  "testCount": 43,
+  "lint": [
+    {
+      "report": "lint-results-personalEnhancedDebug.xml",
+      "errors": 0,
+      "warnings": 11
+    },
+    {
+      "report": "lint-results-personalOfflineDebug.xml",
+      "errors": 0,
+      "warnings": 11
+    }
+  ],
+  "apkChecks": [
+    {
+      "apk": "Wo_Android_v1.0.1_Offline.apk",
+      "sizeBytes": 8931193,
+      "sha256": "67f002e15484da8494b2a6eb0bbc22719f7b8f75c747bab4d929f66043c595f0",
+      "hasInternet": false,
+      "signature": [
+        "Verifies",
+        "Verified using v1 scheme (JAR signing): false",
+        "Verified using v2 scheme (APK Signature Scheme v2): true",
+        "Verified using v3 scheme (APK Signature Scheme v3): false",
+        "Verified using v3.1 scheme (APK Signature Scheme v3.1): false",
+        "Verified using v4 scheme (APK Signature Scheme v4): false",
+        "Verified for SourceStamp: false",
+        "Number of signers: 1",
+        "Signer #1 certificate DN: CN=Wo Personal Android, O=Personal, C=CN",
+        "Signer #1 certificate SHA-256 digest: c9b24de261dc30ebbc92da22f3f7826beb2c3015141c7b43d63b1ca27de9cb58",
+        "Signer #1 certificate SHA-1 digest: fc098dfea60e802924def7b5b199310dc649479a",
+        "Signer #1 certificate MD5 digest: 2297613c4d12f09a35fff1fc11b4c6c7",
+        "Signer #1 key algorithm: RSA",
+        "Signer #1 key size (bits): 3072",
+        "Signer #1 public key SHA-256 digest: 11ac98b24ef6ab4d03efd7b0134493702989dc5639db07f37276acf975d8d01c",
+        "Signer #1 public key SHA-1 digest: 6fc93d7b12878d24b36ed664b46d22f377febcaf",
+        "Signer #1 public key MD5 digest: 400e83a4063e05fa008ae58c6d11570e"
+      ],
+      "native": [
+        {
+          "path": "lib/arm64-v8a/libandroidx.graphics.path.so",
+          "pt_load_align": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libsqlcipher.so",
+          "pt_load_align": [
+            16384,
+            16384,
+            16384
+          ]
+        }
+      ],
+      "staticChecks": "PASS",
+      "runtimeDeviceTests": "NOT_RUN"
+    },
+    {
+      "apk": "Wo_Android_v1.0.1_Enhanced.apk",
+      "sizeBytes": 8996745,
+      "sha256": "db1fce2560643150b84e9f47ac9f5f0f347a479ca8ad60659556c26b9628f11f",
+      "hasInternet": true,
+      "signature": [
+        "Verifies",
+        "Verified using v1 scheme (JAR signing): false",
+        "Verified using v2 scheme (APK Signature Scheme v2): true",
+        "Verified using v3 scheme (APK Signature Scheme v3): false",
+        "Verified using v3.1 scheme (APK Signature Scheme v3.1): false",
+        "Verified using v4 scheme (APK Signature Scheme v4): false",
+        "Verified for SourceStamp: false",
+        "Number of signers: 1",
+        "Signer #1 certificate DN: CN=Wo Personal Android, O=Personal, C=CN",
+        "Signer #1 certificate SHA-256 digest: c9b24de261dc30ebbc92da22f3f7826beb2c3015141c7b43d63b1ca27de9cb58",
+        "Signer #1 certificate SHA-1 digest: fc098dfea60e802924def7b5b199310dc649479a",
+        "Signer #1 certificate MD5 digest: 2297613c4d12f09a35fff1fc11b4c6c7",
+        "Signer #1 key algorithm: RSA",
+        "Signer #1 key size (bits): 3072",
+        "Signer #1 public key SHA-256 digest: 11ac98b24ef6ab4d03efd7b0134493702989dc5639db07f37276acf975d8d01c",
+        "Signer #1 public key SHA-1 digest: 6fc93d7b12878d24b36ed664b46d22f377febcaf",
+        "Signer #1 public key MD5 digest: 400e83a4063e05fa008ae58c6d11570e"
+      ],
+      "native": [
+        {
+          "path": "lib/arm64-v8a/libandroidx.graphics.path.so",
+          "pt_load_align": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libsqlcipher.so",
+          "pt_load_align": [
+            16384,
+            16384,
+            16384
+          ]
+        }
+      ],
+      "staticChecks": "PASS",
+      "runtimeDeviceTests": "NOT_RUN"
+    }
+  ],
+  "sameSigningCertificateAsV1_0_0": true,
+  "defaultWorkManagerInitializerRemoved": true,
+  "finalListenerFixPresentInBothApks": true,
+  "schema": "PASS:17 entities,unique source key,FTS4,integrity_check",
+  "deviceTests": "NOT_RUN",
+  "HarmonyOS4_2_0DeviceValidation": "NOT_RUN",
+  "deviceSpecificCrashTrigger": "UNCONFIRMED_NO_DEVICE_LOG",
+  "batteryAnd7DayTests": "NOT_RUN",
+  "previousReport": "archive/v1.0.0/Verification.json"
+}

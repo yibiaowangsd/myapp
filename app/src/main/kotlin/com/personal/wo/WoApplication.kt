@@ -62,7 +62,7 @@ class Graph(val context: Context) {
     private val dropped = AtomicLong(0)
     init {
         System.loadLibrary("sqlcipher")
-        db = Room.databaseBuilder(context,WoDatabase::class.java,"wo.db").openHelperFactory(SupportOpenHelperFactory(vault.password())).setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING).addCallback(object:androidx.room.RoomDatabase.Callback(){override fun onOpen(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("PRAGMA busy_timeout=5000")}}).build()
+        db = Room.databaseBuilder(context,WoDatabase::class.java,"wo.db").openHelperFactory(SupportOpenHelperFactory(vault.password())).setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING).addCallback(DatabaseOpenCallback()).build()
         repo = WoRepository(db,vault,config,context)
         collector = PullCollectors(context,repo)
         scope.launch {

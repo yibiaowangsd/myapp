@@ -24,9 +24,13 @@ class DatabaseBackupTest {
     @Before fun setUp()=runBlocking(Dispatchers.IO) {
         c=ApplicationProvider.getApplicationContext();c.deleteDatabase(name);System.loadLibrary("sqlcipher")
         val vault=KeyVault(c)
-        db=Room.databaseBuilder(c,WoDatabase::class.java,name).openHelperFactory(SupportOpenHelperFactory(vault.password())).build()
+        db=openDatabase(vault)
         repo=WoRepository(db,vault,EngineConfig(),c);repo.initialize();repo.command("start")
     }
+    private fun openDatabase(vault:KeyVault)=Room.databaseBuilder(c,WoDatabase::class.java,name)
+        .openHelperFactory(SupportOpenHelperFactory(vault.password()))
+        .setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+        .addCallback(DatabaseOpenCallback()).build()
     @After fun close() { db.close();c.deleteDatabase(name);c.cacheDir.listFiles()?.filter{it.name.startsWith("wo-test-") }?.forEach{it.delete()} }
     private fun sample():Observation { val now=System.currentTimeMillis();return Observation("notice-test",Source.NOTIFICATION,"notice-test",Kind.NOTICE,now,payload=Payload(label="测试元数据",category="通知片段")) }
     @Test fun databaseReallyIsEncrypted()=runBlocking(Dispatchers.IO) {
@@ -34,6 +38,14 @@ class DatabaseBackupTest {
         assertEquals(1,db.dao().observationCount(0,Long.MAX_VALUE))
         val header=ByteArray(16);c.getDatabasePath(name).inputStream().use{it.read(header)}
         assertFalse(header.contentEquals("SQLite format 3\u0000".toByteArray()))
+    }
+    @Test fun productionOpenCallbackCanReopenWithoutLosingRecords()=runBlocking(Dispatchers.IO) {
+        repo.ingest(listOf(sample()),repo.cachedPolicy.generation)
+        db.close()
+        val vault=KeyVault(c);db=openDatabase(vault)
+        repo=WoRepository(db,vault,EngineConfig(),c);repo.initialize()
+        assertEquals(1,db.dao().observationCount(0,Long.MAX_VALUE))
+        assertTrue(repo.cachedPolicy.requested)
     }
     @Test fun duplicatePauseAndDeletionArePersistent()=runBlocking(Dispatchers.IO) {
         val o=sample();val g=repo.cachedPolicy.generation;repo.ingest(listOf(o,o),g)
