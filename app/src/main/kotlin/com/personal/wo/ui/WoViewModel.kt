@@ -23,7 +23,8 @@ data class WoUiState(
     val selectedDate:String=LocalDate.now().toString(),val demo:Boolean=false,val databaseBytes:Long=0,
     val diagnostics:List<String> = emptyList(),val positions:List<Observation> = emptyList(),
     val apps:List<ConnectedApp> = emptyList(),val appsLoaded:Boolean=false,
-    val homeAppMinMinutes:Int=10
+    val homeAppMinMinutes:Int=10,
+    val achievements:AchievementSnapshot?=null,val achievementsLoading:Boolean=false,val achievementError:String?=null
 )
 class WoViewModel(application:Application):AndroidViewModel(application) {
     private val app=application as WoApplication
@@ -106,7 +107,7 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         mutable.update { it.copy(demo=false) }
         action { g ->
             g.repo.configure { it.copy(enabledSources=sources) }
-            g.repo.command(if(g.repo.cachedPolicy.paused) "resume" else "start")
+            g.repo.command(if(g.repo.cachedPolicy.paused)"resume" else "start")
             g.collector.probe()
             if(!WorkScheduling.schedule(app))message("系统后台调度暂不可用，打开应用时仍会同步")
             RecordingService.start(app)

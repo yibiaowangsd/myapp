@@ -142,7 +142,8 @@ import java.util.Locale
     }
 }
 
-@Composable fun MePage(s:WoUiState,permissions:()->Unit,settings:()->Unit,insights:()->Unit,recording:()->Unit,demo:()->Unit) {
+@Composable fun MePage(s:WoUiState,permissions:()->Unit,settings:()->Unit,insights:()->Unit,recording:()->Unit,demo:()->Unit,
+    achievementContent:(@Composable ()->Unit)?=null) {
     LazyColumn(verticalArrangement=Arrangement.spacedBy(16.dp),contentPadding=PaddingValues(top=16.dp,bottom=24.dp)) {
         item { Paper {
             IconTile(Icons.Outlined.Person,size=56)
@@ -154,6 +155,7 @@ import java.util.Locale
                 TextButton(onClick=if(s.policy.requested)recording else permissions){Text(if(s.policy.paused)"继续" else if(s.policy.requested)"暂停" else "去开启")}
             }
         } }
+        if(achievementContent!=null)item(key="achievements"){achievementContent()}
         item { Paper {
             MenuRow(Icons.Outlined.Settings,"记录权限","选择你想留下的内容",permissions)
             HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
