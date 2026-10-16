@@ -66,6 +66,9 @@ import java.time.LocalDate
     val displayed=snapshot?.items.orEmpty().filter {
         (family=="ALL"||it.goal.metric.name==family)&&when(filter){"EARNED"->it.unlocked;"PENDING"->!it.unlocked;"CUSTOM"->it.goal.custom;else->true}
     }
+    val showcased=snapshot?.settings?.showcaseIds.orEmpty().mapNotNull { id ->
+        snapshot?.unlocked?.firstOrNull { it.goal.id==id }
+    }
     LazyVerticalGrid(columns=GridCells.Adaptive(if(large)180.dp else 144.dp),modifier=Modifier.fillMaxSize().testTag("achievement-gallery"),
         contentPadding=PaddingValues(top=12.dp,bottom=28.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item(span={GridItemSpan(maxLineSpan)}) {
@@ -86,6 +89,19 @@ import java.time.LocalDate
             Column(Modifier.fillMaxWidth().padding(8.dp)) {
                 Text(s.achievementError,color=MaterialTheme.colorScheme.error)
                 TextButton(onClick=onRetry){Text("重新整理成就")}
+            }
+        }
+        if(showcased.isNotEmpty())item(span={GridItemSpan(maxLineSpan)}) {
+            Column(Modifier.fillMaxWidth().testTag("achievement-showcase"),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                Text("我的展台",style=MaterialTheme.typography.titleMedium)
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
+                    showcased.forEach { progress ->
+                        Column(Modifier.weight(1f).clickable(onClickLabel="查看${progress.goal.name}"){selectedId=progress.goal.id}.padding(8.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+                            AchievementBadge(progress.goal.metric,progress.goal.tier,true,Modifier.size(72.dp))
+                            Text(progress.goal.name,style=MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
             }
         }
         if(s.achievementsLoading)item(span={GridItemSpan(maxLineSpan)}){LinearProgressIndicator(Modifier.fillMaxWidth())}

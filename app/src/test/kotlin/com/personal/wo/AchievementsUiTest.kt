@@ -68,6 +68,16 @@ class AchievementsUiTest {
         capture("achievements-reading-detail")
         compose.onNodeWithText("放到我的展台（最多3枚）").performScrollTo().performClick();assertEquals("reading-1",pinned)
     }
+    @Test fun pinnedMedalsRemainVisibleOnTheMainAchievementsPage() {
+        val original=fixture();val snapshot=original.achievements!!
+        val pinned=snapshot.unlocked.first()
+        val current=original.copy(achievements=snapshot.copy(settings=snapshot.settings.copy(showcaseIds=listOf(pinned.goal.id))))
+        compose.setContent{screen(current)}
+        compose.onNodeWithTag("achievement-gallery").performScrollToNode(hasTestTag("achievement-showcase"))
+        compose.onNodeWithText("我的展台").assertIsDisplayed()
+        compose.onNode(hasText(pinned.goal.name) and hasAnyAncestor(hasTestTag("achievement-showcase"))).performClick()
+        compose.onNodeWithTag("achievement-rule").assertIsDisplayed()
+    }
     @Test fun customGoalNeedsValidNameAndPositiveTarget() {
         var saved:AchievementGoal?=null
         compose.setContent{screen(create={saved=it})}
