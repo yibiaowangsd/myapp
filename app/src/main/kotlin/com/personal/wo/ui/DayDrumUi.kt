@@ -30,13 +30,16 @@ import kotlin.math.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun DayDrumHome(s:WoUiState,onChapter:(DayChapter)->Unit,statistics:()->Unit,
     refresh:()->Unit,setup:()->Unit,demo:(Boolean)->Unit,onDate:(LocalDate)->Unit={},
-    onThreshold:(Int)->Unit={},today:LocalDate=LocalDate.now(ZoneId.of(s.policy.archiveZone))) {
+    onThreshold:(Int)->Unit={},today:LocalDate=LocalDate.now(ZoneId.of(s.policy.archiveZone)),onAll:()->Unit={}) {
     val day=s.day ?: return
     val date=LocalDate.parse(s.selectedDate)
     val chapters=remember(day,s.homeAppMinMinutes){dayChapters(day,s.homeAppMinMinutes)}
     var calendar by rememberSaveable { mutableStateOf(false) }
     var filter by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    val pager=key(day.dayDate,s.demo){rememberPagerState(initialPage=1,pageCount={chapters.size+2})}
+    val dark=MaterialTheme.colorScheme.background.luminance()<.15f
+    TimelineAtmosphere(day,chapters,pager.currentPage+pager.currentPageOffsetFraction,dark) {
     Column(Modifier.fillMaxSize().testTag("day-drum-home")) {
         Row(Modifier.fillMaxWidth().padding(start=20.dp,end=8.dp,top=4.dp),verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(onClickLabel="选择日期"){calendar=true}.padding(4.dp),verticalArrangement=Arrangement.spacedBy(2.dp)) {
@@ -49,11 +52,12 @@ import kotlin.math.*
             IconButton(onClick=statistics,enabled=day.dayDate==s.selectedDate){Icon(Icons.Outlined.BarChart,"一天统计")}
             Box {
                 IconButton(onClick={menu=true}){Icon(Icons.Outlined.MoreVert,"时间轴选项")}
-                DropdownMenu(menu,{menu=false}) {
+                EventCardTheme { DropdownMenu(menu,{menu=false}) {
+                    DropdownMenuItem(text={Text("查看全部片段")},onClick={menu=false;onAll()},leadingIcon={Icon(Icons.Outlined.List,null)})
                     DropdownMenuItem(text={Text("应用显示门槛 · ${s.homeAppMinMinutes}分钟")},onClick={menu=false;filter=true},leadingIcon={Icon(Icons.Outlined.Tune,null)})
                     DropdownMenuItem(text={Text("更新记录")},onClick={menu=false;refresh()},enabled=!s.busy&&!s.demo,leadingIcon={Icon(Icons.Outlined.Refresh,null)})
                     if(s.demo)DropdownMenuItem(text={Text("退出虚构演示")},onClick={menu=false;demo(false)})
-                }
+                } }
             }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
@@ -65,22 +69,23 @@ import kotlin.math.*
             Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
         } else if(chapters.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp),contentAlignment=Alignment.Center) {
-                Paper {
+                EventCardTheme { Paper {
                     IconTile(Icons.Outlined.Timeline,size=56)
-                    Text("这一天，还没有留下片段",style=MaterialTheme.typography.headlineSmall)
+                    Text(if(recapEpisodes(day).isEmpty())"这一天，还没有留下片段" else "小片段，先收在这里",style=MaterialTheme.typography.headlineSmall)
                     Muted("可以换个日期回看。留下的照片、活动和较长的应用时段，会在这条时间轴上浮现。")
+                    if(recapEpisodes(day).isNotEmpty())TextButton(onClick=onAll){Text("查看全部 ${recapEpisodes(day).size} 个片段")}
                     TextButton(onClick=setup){Text("开启记录来源")}
                     TextButton(onClick={demo(true)}){Text("转动示例看看")}
-                }
+                } }
             }
-        } else key(day.dayDate,s.demo) {
-            val pager=rememberPagerState(initialPage=1,pageCount={chapters.size+2})
-            DayDrum(day,chapters,pager,onChapter,onDate,today,Modifier.weight(1f))
+        } else {
+            DayDrum(day,chapters,pager,onChapter,onDate,today,Modifier.weight(1f),onAll)
         }
+    }
     }
     if(filter)AlertDialog(onDismissRequest={filter=false},title={Text("首页保留较长的应用使用")},text={
         Column {
-            Text("单次使用达到所选时长才出现在时间轴。较短的使用仍保留在时段详情里。",style=MaterialTheme.typography.bodyMedium)
+            Text("单次使用达到所选时长才出现在时间轴。较短的使用仍保留在事件详情和全部片段里。",style=MaterialTheme.typography.bodyMedium)
             homeAppThresholds.forEach { minutes ->
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable{onThreshold(minutes);filter=false}.padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically) {
                     RadioButton(selected=s.homeAppMinMinutes==minutes,onClick={onThreshold(minutes);filter=false})
@@ -115,7 +120,7 @@ internal fun drumPose(offset:Float):DrumPose {
 }
 
 @Composable internal fun DayDrum(day:DayView,chapters:List<DayChapter>,pager:PagerState,
-    onChapter:(DayChapter)->Unit,onDate:(LocalDate)->Unit,today:LocalDate,modifier:Modifier=Modifier) {
+    onChapter:(DayChapter)->Unit,onDate:(LocalDate)->Unit,today:LocalDate,modifier:Modifier=Modifier,onAll:()->Unit={}) {
     val scope=rememberCoroutineScope()
     var navigation by remember { mutableStateOf<Job?>(null) }
     var scrubbing by remember { mutableStateOf<Float?>(null) }
@@ -144,9 +149,9 @@ internal fun drumPose(offset:Float):DrumPose {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                     IconButton(onClick={move(selected-1)},enabled=selected>0){Icon(Icons.Outlined.ChevronLeft,"上一段经历")}
                     Column(Modifier.weight(1f),horizontalAlignment=Alignment.CenterHorizontally) {
-                        Text(active?.part?.let{"${it.label} · ${partRange(it,day.zoneId)}"} ?: if(selected==0)"回看前一天" else if(date<today)"继续到后一天" else "今天，先到这里",
+                        Text(active?.part?.let{partRange(it,day.zoneId)} ?: if(selected==0)"回看前一天" else if(date<today)"继续到后一天" else "今天，先到这里",
                             style=MaterialTheme.typography.titleSmall,modifier=Modifier.testTag("drum-selected-time"))
-                        Text(if(active!=null)"$selected / ${chapters.size} 个时段" else "日期之间，也可以转动",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,
+                        Text(if(active!=null)"$selected / ${chapters.size} 个大事件" else "日期之间，也可以转动",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier=Modifier.testTag("drum-position"))
                     }
                     IconButton(onClick={move(selected+1)},enabled=selected<chapters.size+1){Icon(Icons.Outlined.ChevronRight,"下一段经历")}
@@ -161,15 +166,16 @@ internal fun drumPose(offset:Float):DrumPose {
                 },onValueChangeFinished={scrubbing=null},enabled=chapters.size>1,
                     modifier=Modifier.fillMaxWidth().height(40.dp).testTag("day-time-scrubber").semantics {
                         contentDescription="一天的时间轴"
-                        stateDescription=active?.part?.label ?: "日期边界"
+                        stateDescription=active?.part?.let{partRange(it,day.zoneId)} ?: "日期边界"
                     })
-                Row(Modifier.fillMaxWidth().padding(bottom=if(wide)4.dp else 12.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-                    listOf("凌晨","上午","下午","晚上").forEach { part ->
-                        val first=chapters.indexOfFirst{it.part.label==part}
-                        Text(part,Modifier.testTag("drum-jump-$part").clip(CircleShape).clickable(enabled=first>=0){move(first+1)}.padding(horizontal=if(wide)4.dp else 8.dp,vertical=12.dp),
-                            style=MaterialTheme.typography.labelMedium,color=if(part==active?.part?.label)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=if(first>=0)1f else .45f))
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                    listOf(0f,.25f,.5f,.75f,1f).forEach { tick ->
+                        val time=day.windowStartMs+(length*tick).toLong()
+                        Text(if(tick==1f)"24:00" else clock(time,day.zoneId),Modifier.testTag("drum-tick-${(tick*100).toInt()}").clip(CircleShape)
+                            .clickable{move(nearestChapter(chapters,time)+1)}.padding(horizontal=4.dp,vertical=8.dp),style=MaterialTheme.typography.labelSmall)
                     }
                 }
+                TextButton(onClick=onAll,modifier=Modifier.testTag("all-fragments")){Text("查看全部片段",style=MaterialTheme.typography.labelMedium)}
             }
         }
         if(wide)Row(Modifier.fillMaxSize(),verticalAlignment=Alignment.CenterVertically) {
@@ -199,22 +205,24 @@ internal fun drumPose(offset:Float):DrumPose {
         visible.forEach { index ->
             val offset=(index-pager.currentPage)-pager.currentPageOffsetFraction
             val pose=drumPose(offset)
-            if(pose.alpha>0f)key(chapters.getOrNull(index-1)?.part?.startMs ?: "edge-$index") {
+            if(pose.alpha>0f)key(chapters.getOrNull(index-1)?.id ?: "edge-$index") {
                 val visual=Modifier.offset { IntOffset((pose.x*widthPx).roundToInt(),with(displayDensity){pose.y.dp.roundToPx()}) }
                     .width(width).height(height).zIndex(pose.depth).graphicsLayer {
                     rotationY=pose.rotation;cameraDistance=14f*density
                     scaleX=pose.scale;scaleY=pose.scale;alpha=pose.alpha
                 }.clearAndSetSemantics { }
                 val chapter=chapters.getOrNull(index-1)
-                if(chapter!=null)ChapterFace(chapter,day.zoneId,visual,compact,largeType)
-                else DateFace(day,index==0,hasNextDate,visual,compact)
+                EventCardTheme {
+                    if(chapter!=null)ChapterFace(chapter,day.zoneId,visual,compact,largeType)
+                    else DateFace(day,index==0,hasNextDate,visual,compact)
+                }
             }
         }
         // Transparent native pager owns dragging, snapping, keys and accessibility.
         // Its hit areas align with the centered card and the two exposed edges.
         HorizontalPager(state=pager,pageSize=PageSize.Fixed(width),contentPadding=PaddingValues(horizontal=padding,vertical=14.dp),
             beyondViewportPageCount=1,flingBehavior=PagerDefaults.flingBehavior(pager,pagerSnapDistance=PagerSnapDistance.atMost(4)),
-            key={ index -> latest.getOrNull(index-1)?.part?.startMs ?: when(index){0->"previous-day";latest.size+1->"end-day";else->"pending-$index"} },
+            key={ index -> latest.getOrNull(index-1)?.id ?: when(index){0->"previous-day";latest.size+1->"end-day";else->"pending-$index"} },
             modifier=Modifier.fillMaxSize().zIndex(2f).testTag("experience-drum")) { index ->
             val chapter=latest.getOrNull(index-1)
             val center=index==pager.currentPage
@@ -223,34 +231,40 @@ internal fun drumPose(offset:Float):DrumPose {
                     it.apps.joinToString("，"){a->"${a.episode.title}${durationText(a.durationMs)}"}+
                     if(it.photos.isNotEmpty())"，${it.photos.size}项影像" else "" } ?: if(index==0)"回看前一天" else if(hasNextDate)"继续到后一天" else "今天，先到这里"
             } else Modifier.clearAndSetSemantics { }).clickable(enabled=chapter!=null||index==0||hasNextDate||!center,
-                onClickLabel=if(chapter!=null)"查看这个时段的全部片段" else "查看日期"){activateLatest(index)})
+                onClickLabel=if(chapter!=null)"查看这个大事件的全部片段" else "查看日期"){activateLatest(index)})
         }
     }
 }
 
-internal fun partRange(part:RecapPart,zone:String)="${clock(part.startMs,zone)}–${if(clock(part.endMs,zone)=="00:00")"24:00" else clock(part.endMs,zone)}"
-private fun partIcon(label:String)=when(label){"凌晨"->Icons.Outlined.Bedtime;"上午"->Icons.Outlined.WbSunny;"下午"->Icons.Outlined.LightMode;else->Icons.Outlined.DarkMode}
+internal fun partRange(part:RecapPart,zone:String)=if(part.startMs==part.endMs)clock(part.startMs,zone) else "${clock(part.startMs,zone)}–${if(clock(part.endMs,zone)=="00:00")"24:00" else clock(part.endMs,zone)}"
+private fun eventIcon(kind:String)=when(kind){
+    "STAY"->Icons.Outlined.LocationOn;"MOVE"->Icons.Outlined.DirectionsWalk
+    "EXERCISE"->Icons.Outlined.FitnessCenter;"SLEEP"->Icons.Outlined.Bedtime
+    "PHOTO"->Icons.Outlined.PhotoLibrary;"MEDIA"->Icons.Outlined.Headphones;else->Icons.Outlined.Smartphone
+}
 
 @Composable private fun ChapterFace(chapter:DayChapter,zone:String,modifier:Modifier,compact:Boolean,largeType:Boolean) {
-    val part=chapter.part;val tint=partTint(part.label)
+    val part=chapter.part;val tint=MaterialTheme.colorScheme.primary
+    val title=part.label.removeSuffix("（推测）")
+    val timeLabel=(if(part.label.endsWith("（推测）"))"推测 · " else "")+partRange(part,zone)
     Surface(modifier,shape=RoundedCornerShape(28.dp),color=MaterialTheme.colorScheme.surface,
         border=BorderStroke(1.dp,tint.copy(alpha=.18f)),shadowElevation=4.dp) {
         BoxWithConstraints {
             if(compact||(largeType&&maxHeight<440.dp))Row(Modifier.fillMaxSize().padding(16.dp),horizontalArrangement=Arrangement.spacedBy(14.dp),verticalAlignment=Alignment.CenterVertically) {
                 if(chapter.photos.isNotEmpty())PhotoThumbnail(chapter.photos.first().uri,Modifier.size(76.dp),crop=true)
-                else IconTile(partIcon(part.label),tint,48)
+                else IconTile(eventIcon(chapter.kind),tint,48)
                 Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-                    Text(part.label,style=MaterialTheme.typography.titleLarge,color=tint)
-                    Text(partRange(part,zone),style=MaterialTheme.typography.labelMedium)
+                    Text(title,style=MaterialTheme.typography.titleLarge,color=tint,maxLines=2,overflow=TextOverflow.Ellipsis)
+                    Text(timeLabel,style=MaterialTheme.typography.labelMedium)
                     Text(chapter.summary,maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodyMedium)
                     Text("${part.episodes.size}个片段 · 轻触展开",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else Column(Modifier.fillMaxSize().padding(if(largeType)16.dp else 20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp),verticalAlignment=Alignment.CenterVertically) {
-                    IconTile(partIcon(part.label),tint,40)
+                    IconTile(eventIcon(chapter.kind),tint,40)
                     Column(Modifier.weight(1f)) {
-                        Text(part.label,style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Medium,color=tint)
-                        Text(partRange(part,zone),style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(title,style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Medium,color=tint,maxLines=2,overflow=TextOverflow.Ellipsis)
+                        Text(timeLabel,style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Text(chapter.summary,style=MaterialTheme.typography.bodyLarge,maxLines=2,overflow=TextOverflow.Ellipsis)
@@ -275,7 +289,10 @@ private fun partIcon(label:String)=when(label){"凌晨"->Icons.Outlined.Bedtime;
                     }
                     if(chapter.apps.size>shown.size)Text("另有${chapter.apps.size-shown.size}个应用的较长使用",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if(chapter.photos.isEmpty())Spacer(Modifier.weight(1f))
+                if(chapter.photos.isEmpty())Column(Modifier.weight(1f).fillMaxWidth(),verticalArrangement=Arrangement.Center) {
+                    Text(durationText(chapter.durationMs),style=MaterialTheme.typography.headlineLarge.copy(fontSize=40.sp,lineHeight=50.sp),maxLines=1,overflow=TextOverflow.Ellipsis)
+                    Text("记录时长",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                     Text("${part.episodes.size}个片段${if(chapter.photos.size>2)" · ${chapter.photos.size}项影像" else ""}",Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("展开",style=MaterialTheme.typography.labelLarge,color=tint)
@@ -301,7 +318,7 @@ private fun partIcon(label:String)=when(label){"凌晨"->Icons.Outlined.Bedtime;
 }
 
 @Composable fun ChapterDetailsPage(day:DayView,chapter:DayChapter?,minimum:Int,onEpisode:(Episode)->Unit) {
-    if(chapter==null){Empty("这个时段已更新","返回时间轴查看最新片段。");return}
+    if(chapter==null){Empty("这个大事件已更新","返回时间轴查看最新片段。");return}
     LazyColumn(Modifier.testTag("chapter-details"),verticalArrangement=Arrangement.spacedBy(14.dp),contentPadding=PaddingValues(top=8.dp,bottom=24.dp)) {
         item { Text(chapter.part.label,style=MaterialTheme.typography.headlineLarge);Muted("${day.dayDate} · ${partRange(chapter.part,day.zoneId)}");Text(chapter.summary,Modifier.padding(top=12.dp),style=MaterialTheme.typography.bodyLarge) }
         if(chapter.photos.isNotEmpty()) {

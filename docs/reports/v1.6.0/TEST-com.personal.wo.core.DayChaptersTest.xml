@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.core.DayChaptersTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-15T19:51:14.083Z" hostname="62873a7a8612" time="0.023">
+  <properties/>
+  <testcase name="sessionCrossingAStayKeepsItsOwnRangeWithoutDuplicatedDuration" classname="com.personal.wo.core.DayChaptersTest" time="0.01"/>
+  <testcase name="thresholdQualifiesEachObservedSessionInclusivelyBeforeGrouping" classname="com.personal.wo.core.DayChaptersTest" time="0.001"/>
+  <testcase name="nearbyPhotosGroupByTheirActualTimesWithEveryUriReachable" classname="com.personal.wo.core.DayChaptersTest" time="0.001"/>
+  <testcase name="realWorldEventCollectsRelatedEvidenceAndKeepsInferenceVisible" classname="com.personal.wo.core.DayChaptersTest" time="0.001"/>
+  <testcase name="crossNoonEventKeepsOneActualIntervalWithoutClockBuckets" classname="com.personal.wo.core.DayChaptersTest" time="0.0"/>
+  <testcase name="distinctActivitiesAndOverlappingEvidenceHaveOneOwner" classname="com.personal.wo.core.DayChaptersTest" time="0.003"/>
+  <testcase name="localDayBoundsAndSeekingWorkAcrossDaylightSavingChanges" classname="com.personal.wo.core.DayChaptersTest" time="0.003"/>
+  <testcase name="shortOpeningsDoNotInventAnEventAndRawDayRemainsIntact" classname="com.personal.wo.core.DayChaptersTest" time="0.001"/>
+  <testcase name="stableIdsDistinguishSimultaneousEventsAndSurviveRelatedUpdates" classname="com.personal.wo.core.DayChaptersTest" time="0.001"/>
+  <testcase name="appOverlapsAreUnionedAndGapsAreNeverCounted" classname="com.personal.wo.core.DayChaptersTest" time="0.0"/>
+  <testcase name="adjacencyChainsCannotMergeAnEntireDay" classname="com.personal.wo.core.DayChaptersTest" time="0.002"/>
+  <testcase name="cutoffPlansClockConflictsAndUnknownNeverInventLongUsage" classname="com.personal.wo.core.DayChaptersTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

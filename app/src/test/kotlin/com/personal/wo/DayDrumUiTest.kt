@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -81,7 +82,7 @@ class DayDrumUiTest {
         compose.onNodeWithTag("experience-drum").assertIsDisplayed()
         compose.onNodeWithTag("today-list").assertDoesNotExist()
         compose.onNodeWithTag("day-usage-chart").assertDoesNotExist()
-        compose.onNodeWithTag("drum-position").assertTextEquals("1 / 3 个时段")
+        compose.onNodeWithTag("drum-position").assertTextEquals("1 / 3 个大事件")
         compose.onNodeWithTag("chapter-open").assertContentDescriptionContains("浏览器35分钟",substring=true)
         compose.onNodeWithTag("chapter-open").assertContentDescriptionContains("2项影像",substring=true)
         compose.onNodeWithContentDescription("上一段经历").assertIsEnabled()
@@ -94,27 +95,27 @@ class DayDrumUiTest {
         compose.onNodeWithTag("experience-drum").performTouchInput {
             down(Offset(width*.8f,centerY));moveTo(Offset(width*.3f,centerY),delayMillis=650);advanceEventTime(300);up()
         }
-        compose.onNodeWithTag("drum-position").assertTextEquals("2 / 3 个时段")
+        compose.onNodeWithTag("drum-position").assertTextEquals("2 / 3 个大事件")
         capture("23-chapter-middle")
         compose.onNodeWithTag("day-time-scrubber").performSemanticsAction(SemanticsActions.SetProgress){it(.95f)}
-        compose.onNodeWithTag("drum-position").assertTextEquals("3 / 3 个时段")
-        compose.onNodeWithTag("chapter-open").performClick();assertEquals("晚上",opened)
-        compose.onNodeWithTag("drum-jump-上午").performClick()
-        compose.onNodeWithTag("drum-position").assertTextEquals("1 / 3 个时段")
+        compose.onNodeWithTag("drum-position").assertTextEquals("3 / 3 个大事件")
+        compose.onNodeWithTag("chapter-open").performClick();assertEquals("晚间音乐",opened)
+        compose.onNodeWithTag("drum-tick-25").performClick()
+        compose.onNodeWithTag("drum-position").assertTextEquals("1 / 3 个大事件")
     }
     @Test fun restoreAndDynamicPartsPreserveTheSelectedPeriod() {
         val restore=StateRestorationTester(compose);var s by mutableStateOf(state())
         restore.setContent{Shell(s)}
         compose.onNodeWithContentDescription("下一段经历").performClick();restore.emulateSavedInstanceStateRestore()
-        compose.onNodeWithTag("drum-position").assertTextEquals("2 / 3 个时段")
+        compose.onNodeWithTag("drum-position").assertTextEquals("2 / 3 个大事件")
         compose.runOnIdle {
-            val d=s.day!!;val earlier=d.episodes.first().copy(id="earlier",startMs=d.windowStartMs+60_000L,endMs=d.windowStartMs+120_000L)
+            val d=s.day!!;val earlier=d.episodes.first().copy(id="earlier",startMs=d.windowStartMs+60_000L,endMs=d.windowStartMs+60_000L,kind="PHOTO")
             s=s.copy(day=d.copy(episodes=listOf(earlier)+d.episodes))
         }
-        compose.onNodeWithTag("drum-selected-time").assertTextEquals("下午 · 12:00–18:00")
-        compose.onNodeWithTag("drum-position").assertTextEquals("3 / 4 个时段")
+        compose.onNodeWithTag("drum-selected-time").assertTextEquals("14:00")
+        compose.onNodeWithTag("drum-position").assertTextEquals("3 / 4 个大事件")
         compose.runOnIdle {s=s.copy(day=s.day!!.let{it.copy(episodes=it.episodes.filterNot{e->e.id=="afternoon"})})}
-        compose.onNodeWithTag("drum-selected-time").assertTextEquals("晚上 · 18:00–21:30")
+        compose.onNodeWithTag("drum-selected-time").assertTextEquals("20:00–21:00")
     }
     @Test fun emptyHistoricalDayKeepsDateControlsWithoutInventingRecords() {
         var setup=false;var selected:LocalDate?=null
@@ -134,14 +135,14 @@ class DayDrumUiTest {
         }
         capture("26-chapter-large-dark")
         compose.onNodeWithContentDescription("下一段经历").assertIsDisplayed().performClick()
-        compose.onNodeWithTag("drum-selected-time").assertTextEquals("下午 · 12:00–18:00")
+        compose.onNodeWithTag("drum-selected-time").assertTextEquals("14:00")
         compose.onNodeWithContentDescription("一天统计").performClick();assertTrue(stats)
     }
     @Test @Config(qualifiers="zh-rCN-w800dp-h360dp-land-xhdpi")
     fun landscapeKeepsPeriodAndTimeControlsVisible() {
         seedImages();compose.setContent{Shell()}
         compose.onNodeWithContentDescription("下一段经历").assertIsDisplayed().performClick()
-        compose.onNodeWithTag("drum-selected-time").assertTextEquals("下午 · 12:00–18:00")
+        compose.onNodeWithTag("drum-selected-time").assertTextEquals("14:00")
         compose.onNodeWithTag("day-time-scrubber").assertIsDisplayed();capture("29-chapter-landscape")
     }
     @Test fun statsPageKeepsChartsAndEpisodeDetailsReachable() {
@@ -172,7 +173,7 @@ class DayDrumUiTest {
         compose.onNodeWithContentDescription("时间轴选项").performClick()
         compose.onNodeWithText("应用显示门槛 · 10分钟").performClick();capture("31-chapter-filter")
         compose.onNodeWithText("至少 30 分钟").performClick()
-        compose.onNodeWithTag("drum-position").assertTextEquals("1 / 3 个时段")
+        compose.onNodeWithTag("drum-position").assertTextEquals("1 / 3 个大事件")
         assertEquals(30,s.homeAppMinMinutes)
         assertTrue(dayChapters(s.day!!,30).first().part.episodes.any{it.id=="short-app"})
     }
@@ -207,17 +208,75 @@ class DayDrumUiTest {
     }
     @Test fun cylinderHasDepthFramesInBothDirections() {
         seedImages();val day=state().day!!;val chapters=dayChapters(day);lateinit var pager:PagerState
-        compose.setContent{WoTheme(dark=false){Surface(color=MaterialTheme.colorScheme.background){Column(Modifier.fillMaxSize()) {
-            Text("虚构示例 · 左右转动一天",Modifier.padding(24.dp),style=MaterialTheme.typography.titleMedium)
+        compose.setContent{WoTheme(dark=false){
             pager=rememberPagerState(initialPage=2,pageCount={chapters.size+2})
-            DayDrum(day,chapters,pager,{},{},date,Modifier.weight(1f))
-        }}}}
-        for(frame in 0..24) {
-            val position=1f+frame/12f;val page=position.roundToInt()
+            TimelineAtmosphere(day,chapters,pager.currentPage+pager.currentPageOffsetFraction,dark=false) {
+                Column(Modifier.fillMaxSize()) {
+                    Text("虚构示例 · 大事件与时间光影",Modifier.padding(24.dp),style=MaterialTheme.typography.titleMedium)
+                    DayDrum(day,chapters,pager,{},{},date,Modifier.weight(1f))
+                }
+            }
+        }}
+        for(frame in 0..36) {
+            val position=frame/9f;val page=position.roundToInt()
             compose.runOnIdle {runBlocking{pager.scrollToPage(page,position-page)}}
             capture("frame-%02d".format(frame),true)
             if(frame==5)capture("28-chapter-depth-left")
             if(frame==19)capture("33-chapter-depth-right")
         }
     }
+    @Test fun onlySmallFragmentsStayReachableWithoutInventingLargeEvents() {
+        var opened=false;val s=state().let{it.copy(day=it.day!!.copy(episodes=it.day!!.episodes.filter{e->e.id=="short-app"}))}
+        compose.setContent{WoTheme(dark=false){DayDrumHome(s,{},{},{},{},{},today=date,onAll={opened=true})}}
+        compose.onNodeWithTag("experience-drum").assertDoesNotExist()
+        compose.onNodeWithText("小片段，先收在这里").assertIsDisplayed()
+        compose.onNodeWithText("查看全部 1 个片段").performClick();assertTrue(opened)
+        capture("34-small-fragments")
+    }
+    @Test fun eventTimesAndColorsFollowTheArchiveInsteadOfPhoneClock() {
+        val day=state().day!!;val chapters=dayChapters(day)
+        assertEquals(chapters[0].part.startMs,drumTime(day,chapters,1f))
+        assertEquals(chapters[1].part.startMs,drumTime(day,chapters,2f))
+        assertEquals((chapters[0].part.startMs+chapters[1].part.startMs)/2,drumTime(day,chapters,1.5f))
+        val morning=dayAtmosphere(chapters[0].part.startMs,day.zoneId,false)
+        val night=dayAtmosphere(chapters[2].part.startMs,day.zoneId,false)
+        assertNotEquals(morning.top,night.top)
+        val otherZone=dayAtmosphere(chapters[0].part.startMs,"America/New_York",false)
+        assertNotEquals(morning.top,otherZone.top)
+        // Adjacent clock minutes cannot cause a four-period palette jump.
+        val before=dayAtmosphere(day.windowStartMs+6*3600_000L-1000,day.zoneId,false)
+        val after=dayAtmosphere(day.windowStartMs+6*3600_000L+1000,day.zoneId,false)
+        assertTrue(kotlin.math.abs(before.top.red-after.top.red)<.002f)
+    }
+    @Test fun actualBackgroundChangesWhileRotatingAndAllFragmentsRemainReachable() {
+        seedImages();var opened=false
+        compose.setContent{WoTheme(dark=false){DayDrumHome(state(),{},{},{},{},{},today=date,onAll={opened=true})}}
+        fun sample():Int {
+            var color=0
+            compose.runOnIdle {
+                val view=compose.activity.window.decorView;val b=Bitmap.createBitmap(view.width,view.height,Bitmap.Config.ARGB_8888)
+                view.draw(Canvas(b));color=b.getPixel(4,300);b.recycle()
+            };return color
+        }
+        val daytime=sample();capture("35-event-daylight")
+        compose.onNodeWithTag("day-time-scrubber").performSemanticsAction(SemanticsActions.SetProgress){it(.99f)}
+        compose.onNodeWithTag("drum-selected-time").assertTextEquals("20:00–21:00")
+        assertNotEquals(daytime,sample());capture("36-event-night")
+        compose.onNodeWithTag("all-fragments").performClick();assertTrue(opened)
+        compose.onNodeWithTag("drum-tick-25").performClick()
+        assertEquals(daytime,sample())
+        compose.onNodeWithText("凌晨").assertDoesNotExist();compose.onNodeWithText("上午").assertDoesNotExist()
+    }
+
+    @Test fun backgroundAndCardTextKeepContrastThroughoutTheClockAndDarkMode() {
+        val day=state().day!!
+        fun contrast(a:androidx.compose.ui.graphics.Color,b:androidx.compose.ui.graphics.Color)=
+            (maxOf(a.luminance(),b.luminance())+.05f)/(minOf(a.luminance(),b.luminance())+.05f)
+        for(dark in listOf(false,true))for(minute in 0 until 1440) {
+            val sky=dayAtmosphere(day.windowStartMs+minute*60_000L,day.zoneId,dark)
+            assertTrue("background at $minute / $dark",contrast(sky.ink,sky.top)>=4.5f)
+            assertTrue("card at $minute / $dark",contrast(sky.cardInk,sky.card)>=4.5f)
+        }
+    }
+
 }

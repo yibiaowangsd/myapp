@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.core.StepReadingsTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-15T19:51:14.173Z" hostname="62873a7a8612" time="0.0">
+  <properties/>
+  <testcase name="firstCounterIsBaselineNotLifetimeSteps" classname="com.personal.wo.core.StepReadingsTest" time="0.0"/>
+  <testcase name="resetOrRebootCannotCreateNegativeOrHugeDeltas" classname="com.personal.wo.core.StepReadingsTest" time="0.0"/>
+  <testcase name="detectorCountsEachStepOnceAndRejectsMalformedEvents" classname="com.personal.wo.core.StepReadingsTest" time="0.0"/>
+  <testcase name="batchedEventsUseSensorTimeInsteadOfArrivalTime" classname="com.personal.wo.core.StepReadingsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

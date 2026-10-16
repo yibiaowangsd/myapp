@@ -1,0 +1,71 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.13/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Checking the license for package Android SDK Platform-Tools in /workspace/scratch/1c76f045a166/build-work/sdk/licenses
+Warning: License for package Android SDK Platform-Tools not accepted.
+WARNING: platform-tools package is not installed. Please accept the installation licence to continue
+> Task :core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:compileKotlin UP-TO-DATE
+> Task :core:compileJava NO-SOURCE
+> Task :core:processResources NO-SOURCE
+> Task :core:classes UP-TO-DATE
+> Task :core:jar UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:prePersonalEnhancedReleaseBuild UP-TO-DATE
+> Task :app:mergePersonalEnhancedReleaseJniLibFolders UP-TO-DATE
+> Task :app:mergePersonalEnhancedReleaseNativeLibs UP-TO-DATE
+> Task :app:stripPersonalEnhancedReleaseDebugSymbols UP-TO-DATE
+> Task :app:extractPersonalEnhancedReleaseNativeSymbolTables UP-TO-DATE
+> Task :app:mergePersonalEnhancedReleaseNativeDebugMetadata NO-SOURCE
+> Task :app:buildKotlinToolingMetadata UP-TO-DATE
+> Task :app:checkPersonalEnhancedReleaseDuplicateClasses UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generatePersonalEnhancedReleaseBuildConfig UP-TO-DATE
+> Task :app:checkPersonalEnhancedReleaseAarMetadata UP-TO-DATE
+> Task :app:processPersonalEnhancedReleaseNavigationResources UP-TO-DATE
+> Task :app:compilePersonalEnhancedReleaseNavigationResources UP-TO-DATE
+> Task :app:generatePersonalEnhancedReleaseResValues UP-TO-DATE
+> Task :app:mapPersonalEnhancedReleaseSourceSetPaths UP-TO-DATE
+> Task :app:generatePersonalEnhancedReleaseResources UP-TO-DATE
+> Task :app:mergePersonalEnhancedReleaseResources UP-TO-DATE
+> Task :app:packagePersonalEnhancedReleaseResources UP-TO-DATE
+> Task :app:parsePersonalEnhancedReleaseLocalResources UP-TO-DATE
+> Task :app:createPersonalEnhancedReleaseCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksPersonalEnhancedRelease UP-TO-DATE
+> Task :app:processPersonalEnhancedReleaseMainManifest UP-TO-DATE
+> Task :app:processPersonalEnhancedReleaseManifest UP-TO-DATE
+> Task :app:processPersonalEnhancedReleaseManifestForPackage UP-TO-DATE
+> Task :app:processPersonalEnhancedReleaseResources UP-TO-DATE
+> Task :app:kaptGenerateStubsPersonalEnhancedReleaseKotlin UP-TO-DATE
+> Task :app:kaptPersonalEnhancedReleaseKotlin UP-TO-DATE
+> Task :app:compilePersonalEnhancedReleaseKotlin UP-TO-DATE
+> Task :app:javaPreCompilePersonalEnhancedRelease UP-TO-DATE
+> Task :app:compilePersonalEnhancedReleaseJavaWithJavac UP-TO-DATE
+> Task :app:mergePersonalEnhancedReleaseArtProfile UP-TO-DATE
+> Task :app:expandPersonalEnhancedReleaseArtProfileWildcards UP-TO-DATE
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :app:mergePersonalEnhancedReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :app:processPersonalEnhancedReleaseJavaRes UP-TO-DATE
+> Task :app:mergePersonalEnhancedReleaseJavaResource UP-TO-DATE
+> Task :app:mergePersonalEnhancedReleaseStartupProfile UP-TO-DATE
+> Task :app:minifyPersonalEnhancedReleaseWithR8 UP-TO-DATE
+> Task :app:compilePersonalEnhancedReleaseArtProfile UP-TO-DATE
+> Task :app:mergePersonalEnhancedReleaseShaders UP-TO-DATE
+> Task :app:compilePersonalEnhancedReleaseShaders NO-SOURCE
+> Task :app:generatePersonalEnhancedReleaseAssets UP-TO-DATE
+> Task :app:mergePersonalEnhancedReleaseAssets UP-TO-DATE
+> Task :app:compressPersonalEnhancedReleaseAssets UP-TO-DATE
+> Task :app:extractPersonalEnhancedReleaseVersionControlInfo UP-TO-DATE
+> Task :app:convertShrunkResourcesToBinaryPersonalEnhancedRelease
+> Task :app:optimizePersonalEnhancedReleaseResources
+> Task :app:collectPersonalEnhancedReleaseDependencies
+> Task :app:sdkPersonalEnhancedReleaseDependencyData
+> Task :app:validateSigningPersonalEnhancedRelease
+> Task :app:writePersonalEnhancedReleaseAppMetadata
+> Task :app:writePersonalEnhancedReleaseSigningConfigVersions
+> Task :app:packagePersonalEnhancedRelease
+> Task :app:createPersonalEnhancedReleaseApkListingFileRedirect
+> Task :app:assemblePersonalEnhancedRelease
+w: Detected multiple Kotlin daemon sessions at 
+
+BUILD SUCCESSFUL in 11s
+51 actionable tasks: 9 executed, 42 up-to-date

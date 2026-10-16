@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.core.DayMomentsTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-15T19:51:14.108Z" hostname="62873a7a8612" time="0.002">
+  <properties/>
+  <testcase name="futurePlansAndUnknownEventsNeverBecomeExperiences" classname="com.personal.wo.core.DayMomentsTest" time="0.001"/>
+  <testcase name="StepIntervalAppearsOnceAtItsEndingPartWithoutDividingAmount" classname="com.personal.wo.core.DayMomentsTest" time="0.0"/>
+  <testcase name="ScrubbingKeepsGapsAndSelectsOnlyActualRecords" classname="com.personal.wo.core.DayMomentsTest" time="0.0"/>
+  <testcase name="chronologicalOrderClipsBoundariesWithoutAlteringOriginalEvidence" classname="com.personal.wo.core.DayMomentsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

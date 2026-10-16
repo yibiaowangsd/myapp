@@ -2,18 +2,18 @@
 
 文档更新：2026-10-16（Asia/Shanghai）
 
-对应应用版本：1.5.0；数据库版本：Room V1；包名：`com.personal.wo`。
+对应应用版本：1.6.0；数据库版本：Room V1；包名：`com.personal.wo`。
 
 本仓库包含 1.0.0 基础功能、1.0.1 启动异常处理、1.0.2 数据库打开回调修复、1.1.0界面重构、1.2.0直接授权/计步兼容/每日总结，以及1.3.0时间线首页/应用连接/采集提效。最新构建结果见 Verification.md，原 1.0.0 验证记录保存在 archive/v1.0.0/。修复范围和实际设备验证边界见 [HarmonyOS 启动修复说明](HarmonyOS_4.2.0_Startup_Fix.md)。
 
-新增1.5.0时段时间轴：`DayChapters.kt`对已有片段做纯展示投影，按本地时段汇总并筛选长应用；`DayDrumUi.kt`在共享Box中绘制左右镜像景深，透明原生Pager只负责手势/吸附/状态/语义。照片内嵌、时段详情和日期选择复用原数据。`WoViewModel.homeAppMinutes`用独立界面偏好保存门槛，不做数据库迁移。实现说明见[1.5.0](Chapter_Timeline_1.5.0.md)。旧`DayMoments.kt`及测试保留为历史单片段投影，不再驱动首页。
+新增1.6.0大事件时间轴：`DayChapters.kt`用事件种子、有限合并和独占证据归属替代四个固定时段；`DayAtmosphere.kt`将转筒位置连续映射为归档时间和背景配色。`DayDrumUi.kt`保留双侧共同画布，显示实际事件起止与全天记录入口；详情路由使用稳定ID。实现说明见[1.6.0](Event_Timeline_1.6.0.md)。旧`recapParts`与`DayMoments`及其回归测试保留，不驱动首页。
 
 ## 1. 阅读入口
 
 - [当前实现设计](Design.md)：页面、来源、两个版本、数据处理与限制。
 - [原始设计基线](Design_Baseline.md)：完整原始需求及 G01—G08 验收标准。
 - [验证报告](Verification.md) / [结构化结果](Verification.json)：已执行与未执行的检查。
-- [原始测试与 Lint 报告](reports/)：本轮源码对应的自动检查证据。
+- [本版已有测试报告与构建日志](reports/v1.6.0/)：保留已执行的检查证据；本次上传不重跑测试。历史 Lint 报告仍按版本保存。
 
 ## 2. 环境与固定依赖
 
@@ -42,8 +42,9 @@
 |---|---|
 | `core/.../Models.kt` | 来源、观察、片段、证据、断言、指标、日视图与策略契约 |
 | `core/.../Intervals.kt` | 半开区间、并集/扣除、排除过滤、计步基线、距离与投影 |
-| `core/.../DayChapters.kt` | 时段汇总、单段时长筛选、区间并集、照片引用与时间定位 |
-| `app/.../ui/DayDrumUi.kt` | 共享景深画布、原生Pager、日历、门槛选项、时段详情与统计入口 |
+| `core/.../DayChapters.kt` | 大事件聚合、单段门槛、独占证据归属、区间并集、照片与时间定位 |
+| `app/.../ui/DayDrumUi.kt` | 共享景深画布、原生Pager、日历、门槛选项、事件详情与全部片段/统计入口 |
+| `app/.../ui/DayAtmosphere.kt` | Pager位置 → 归档时间 → 连续背景与卡片配色 |
 | `core/.../DayEngine.kt` | 应用会话、停留/移动、媒体、生活片段、摘要与规律 |
 | `core/.../NoticeRules.kt` | 通知敏感信息脱敏及文本分词 |
 | `core/.../ArchiveRules.kt` | 归档文件名和头部限制 |
@@ -129,7 +130,7 @@ python3 scripts/verify_pragmas.py
 
 Debug 支持 arm64-v8a 和 x86_64。标准 APK 输出在 `app/build/outputs/apk/<flavor>/<buildType>/`；本地单元测试报告在 `core/build/test-results/test/`；Lint 报告在 `app/build/reports/`。
 
-当前包含事件引擎、流式加密、应用时长口径、每日回顾、硬件计步事件、系统权限计划、传感器注册回退、启动恢复、数据库回调和原生UI流程测试。最终测试数量与通过状态见Verification.md。UI测试覆盖点击即请求、统一申请入口、照片不可访问、计步重连、小屏大字体、深色、时间线和日期选择。AndroidTest 4项只编译，尚未在设备执行；本次报告保存在docs/reports/v1.5.0/。
+当前包含事件引擎、流式加密、应用时长口径、每日回顾、硬件计步事件、系统权限计划、传感器注册回退、启动恢复、数据库回调和原生UI流程测试。已有测试数量与通过状态见Verification.md。UI测试覆盖点击即请求、统一申请入口、照片不可访问、计步重连、小屏大字体、深色、时间线和日期选择。AndroidTest 4项在历史版本中编译过，尚未在设备执行；1.6.0已有报告保存在docs/reports/v1.6.0/，不复用旧版Lint或安装包检查作为本版结论。
 
 ## 7. Release 与升级签名
 
@@ -146,12 +147,20 @@ Release 只包含 arm64-v8a，启用 R8 和资源压缩。使用个人签名备�
 ./gradlew :app:assemblePersonalOfflineRelease :app:assemblePersonalEnhancedRelease
 ```
 
+本次按交付要求只构建增强版，使用原个人签名，并跳过额外的 Release Lint：
+
+```bash
+./gradlew :app:assemblePersonalEnhancedRelease -x :app:lintVitalPersonalEnhancedRelease --max-workers=1 --no-parallel --console=plain
+```
+
+该命令的构建日志及已有自动测试结果见[1.6.0记录](Verification.md)。此次仓库同步不重新构建或测试。
+
 未提供签名配置时，构建可能生成未签名产物；不能将其当作可覆盖安装的个人 Release。升级必须复用原签名并提升 versionCode。离线/增强共用包名，切换时可覆盖；Debug 与已有个人签名 Release 冲突时，请使用独立测试设备或先明确备份再选择测试方式。
 
 静态检查脚本需要 APK 路径和 Android SDK 路径：
 
 ```bash
-python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.5.0_Offline.apk /absolute/path/android-sdk
+python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.6.0_Enhanced.apk /absolute/path/android-sdk
 ```
 
 脚本检查签名、min/targetSdk、离线 INTERNET 移除、APK zipalign 以及原生 ELF 16 KiB 对齐。它不能替代 16 KiB Android 设备上的运行验证。离线 APK 文件名应含 `Offline` 或 `personalOffline`，因为脚本据此选择网络权限断言。
@@ -209,7 +218,7 @@ python3 scripts/inspect_apk.py /absolute/path/Wo_Android_v1.5.0_Offline.apk /abs
 
 `docs/Source_SHA256.json` 记录除自身外的仓库交付文件 SHA-256，用于比对来源。更新文件后重新生成清单，保留原始设计和历史验证时间；新增验证应明确实际执行日期和环境。
 
-仓库不包含安装包、原始生活数据、恢复码、签名私钥、API 密钥或本机 SDK 配置。个人签名备份需由本人另行保管。1.5.0 提升 versionCode 到 9，复用原 Release 签名与数据库结构，可覆盖升级。
+仓库不包含安装包、原始生活数据、恢复码、签名私钥、API 密钥或本机 SDK 配置。个人签名备份需由本人另行保管。1.6.0 提升 versionCode 到 10，增强版复用原 Release 签名与数据库结构；数据库仍为 Room V1。
 
 ## 12. 启动兼容约束
 
@@ -259,7 +268,7 @@ DatabaseOpenCallbackTest 使用严格的数据库接口替身测试生产回调�
 
 ## 历史：1.3.1 图文首页与日图表
 
-以下保留上一版实现说明，默认路由已由1.5.0替换。
+以下保留上一版实现说明，默认路由已由1.6.0替换。
 
 - `AppUi.kt`：默认 tab 0 直接调用 `TodayDashboard`；“全部片段”打开 `day` 路由，详情返回保存父路由，首页底栏名为“今天”。保留旧 summary 路由以兼容状态恢复。
 - `DailyRecapUi.kt`：先显示 `recapParts`，再显示统计与图表。两列照片默认取前两项，展开访问全部；`rememberSaveable(part.startMs)` 保留展开状态，时段标题用 FlowRow 适应大字体；时间线连接线根据卡片实际高度绘制。
@@ -279,7 +288,7 @@ DatabaseOpenCallbackTest 使用严格的数据库接口替身测试生产回调�
 
 官方API参考：[Pager](https://developer.android.com/develop/ui/compose/layouts/pager)、[graphicsLayer](https://developer.android.com/develop/ui/compose/graphics/draw/modifiers)。
 
-## 1.5.0 时段时间轴
+## 历史：1.5.0 时段时间轴
 
 - `DayChapters.kt`先筛选单段实际应用时长，再裁到时段、按应用取区间并集；短记录保留在`part.episodes`。步数、影像、推测沿用既有口径。
 - `DayDrumUi.kt`把可见卡片放在共同Box中，以左右镜像的`drumPose`绘制；透明Pager处理拖动、吸附、稳定键与当前卡片的阅读/点击语义。日期入口与实际经历区分。
@@ -287,3 +296,13 @@ DatabaseOpenCallbackTest 使用严格的数据库接口替身测试生产回调�
 - `AppUi.kt`增加时段详情路由。回忆月历进入指定日期首页；返回时保留日期和转筒位置，不强制跳回今天。
 - 核心测试覆盖短段不凑门槛、恰好10分钟、跨午间区间、并集/空档、asOf/未知/计划、全部照片URI、步数单次归属和夏令时。原生UI测试覆盖左右实际像素、正负偏移对称性、双向中间帧、日期、门槛、详情、动态记录变化及尺寸变体。
 - 新证据位于`docs/ui/v1.5.0/`与`docs/reports/v1.5.0/`。测试图片为明确标识的合成样本，不是用户照片。
+
+
+## 1.6.0 大事件与时间背景
+
+- `DayChapters.kt`不再调用`recapParts`；主要事件决定边界，相关证据不得扩张边界。每条原记录只归属一个事件；未归属记录从完整时间线访问。相邻照片最大90分钟、相邻长数字活动最大120分钟，防止传递式合并整天。单条连续长记录仍完整。
+- `DayChapter.id`为来源组类型与主要Episode ID，稳定且区分同时开始的不同事件。路由与Pager键一起切换，删除/新增记录仍沿用原生状态行为。
+- `DayAtmosphere.kt`先按连续Pager位置插值真实时间，再按归档时区内的时分插值色调。取事件时间而非设备当前时间；没有计时器、天气调用、后台动画或新增依赖。
+- `DayDrumUi.kt`替换四段文字按钮为时间刻度；首页及菜单均可进入全部片段。只有短记录时显示数量和入口，详情保留关联短打开。
+- 核心用例覆盖跨中午完整区间、单段门槛、有限合并、重叠并集、照片聚类、同时事件、证据独占、日累计步数、未知/未来/时钟冲突与夏令时。原生UI验证双侧像素、背景随位置真实变色、历史时区、渐变连续性、短记录入口、原有日期/详情/状态和屏幕变体。
+- UI与报告见`docs/ui/v1.6.0/`、`docs/reports/v1.6.0/`。签名连续、Room V1、权限和采集未变；华为真机行为不由Robolectric替代验收。

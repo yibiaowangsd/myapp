@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.UiFlowTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-10-15T19:51:29.835Z" hostname="62873a7a8612" time="3.552">
+  <properties/>
+  <testcase name="connectionControlsRemainAccessibleWithLargeTextAndDarkTheme" classname="com.personal.wo.UiFlowTest" time="0.367"/>
+  <testcase name="sourcePageDisclosesHuaweiAccountNotConnectedAndShowsBackgroundHelp" classname="com.personal.wo.UiFlowTest" time="0.28"/>
+  <testcase name="stepConnectionFailureOffersRetryWithoutHealthConnect" classname="com.personal.wo.UiFlowTest" time="0.22"/>
+  <testcase name="timelineFiltersAndOpensAnEpisode" classname="com.personal.wo.UiFlowTest" time="0.177"/>
+  <testcase name="narrowScreenAndLargeTextKeepSetupAccessible" classname="com.personal.wo.UiFlowTest" time="0.17"/>
+  <testcase name="hourlyChartShowsUnionTotalAndSelectedHourAndNoInventedData" classname="com.personal.wo.UiFlowTest" time="0.126"/>
+  <testcase name="mePageKeepsPermissionsAndPrivacyReachable" classname="com.personal.wo.UiFlowTest" time="0.168"/>
+  <testcase name="photosStayInTheirTimePartAndCanOpenEvenWhenFileIsUnavailable" classname="com.personal.wo.UiFlowTest" time="0.144"/>
+  <testcase name="emptyDashboardOffersSetupAndDoesNotInventMeasurements" classname="com.personal.wo.UiFlowTest" time="0.166"/>
+  <testcase name="chartWithoutUsagePermissionDoesNotRenderZeroBars" classname="com.personal.wo.UiFlowTest" time="0.048"/>
+  <testcase name="connectionSelectionUsesInstalledAppsAndRequestsSystemAccessDirectly" classname="com.personal.wo.UiFlowTest" time="0.386"/>
+  <testcase name="homeOpensPhotoRecapBeforeStatisticsAndKeepsAllFragmentsReachable" classname="com.personal.wo.UiFlowTest" time="0.155"/>
+  <testcase name="photoGroupsExpandWithoutDroppingHiddenImages" classname="com.personal.wo.UiFlowTest" time="0.073"/>
+  <testcase name="recapAndChartsRemainUsableWithLargeTextInDarkMode" classname="com.personal.wo.UiFlowTest" time="0.228"/>
+  <testcase name="dashboardShowsActualDataAndScrollableVisuals" classname="com.personal.wo.UiFlowTest" time="0.395"/>
+  <testcase name="historyCalendarOpensSelectedDate" classname="com.personal.wo.UiFlowTest" time="0.177"/>
+  <testcase name="permissionsOpenSystemDirectlyAndOfferOneBatchAction" classname="com.personal.wo.UiFlowTest" time="0.137"/>
+  <testcase name="darkDashboardRendersAndExitsDemo" classname="com.personal.wo.UiFlowTest" time="0.132"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

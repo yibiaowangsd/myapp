@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.DayDrumUiTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-10-15T19:51:16.376Z" hostname="62873a7a8612" time="13.42">
+  <properties/>
+  <testcase name="homeGroupsPeriodsAndOpensStatisticsExplicitly" classname="com.personal.wo.DayDrumUiTest" time="5.728"/>
+  <testcase name="backgroundAndCardTextKeepContrastThroughoutTheClockAndDarkMode" classname="com.personal.wo.DayDrumUiTest" time="0.12"/>
+  <testcase name="landscapeKeepsPeriodAndTimeControlsVisible" classname="com.personal.wo.DayDrumUiTest" time="0.5"/>
+  <testcase name="narrowDarkLargeTypeStillRotatesAndOpensStats" classname="com.personal.wo.DayDrumUiTest" time="0.369"/>
+  <testcase name="thresholdChoiceDoesNotChangePageOrRemoveRawDetails" classname="com.personal.wo.DayDrumUiTest" time="0.415"/>
+  <testcase name="bothSideFacesAreActuallyDrawnAtMiddleAndPoseIsSymmetric" classname="com.personal.wo.DayDrumUiTest" time="0.357"/>
+  <testcase name="dateEdgesCalendarAndTodayAreReachable" classname="com.personal.wo.DayDrumUiTest" time="0.743"/>
+  <testcase name="onlySmallFragmentsStayReachableWithoutInventingLargeEvents" classname="com.personal.wo.DayDrumUiTest" time="0.151"/>
+  <testcase name="loadingHistoricalDateDoesNotShowPreviousDaysRecords" classname="com.personal.wo.DayDrumUiTest" time="0.09"/>
+  <testcase name="eventTimesAndColorsFollowTheArchiveInsteadOfPhoneClock" classname="com.personal.wo.DayDrumUiTest" time="0.043"/>
+  <testcase name="horizontalGestureAndScrubbingOpenWholePeriod" classname="com.personal.wo.DayDrumUiTest" time="0.416"/>
+  <testcase name="emptyHistoricalDayKeepsDateControlsWithoutInventingRecords" classname="com.personal.wo.DayDrumUiTest" time="0.155"/>
+  <testcase name="actualBackgroundChangesWhileRotatingAndAllFragmentsRemainReachable" classname="com.personal.wo.DayDrumUiTest" time="0.418"/>
+  <testcase name="restoreAndDynamicPartsPreserveTheSelectedPeriod" classname="com.personal.wo.DayDrumUiTest" time="0.272"/>
+  <testcase name="cylinderHasDepthFramesInBothDirections" classname="com.personal.wo.DayDrumUiTest" time="3.225"/>
+  <testcase name="statsPageKeepsChartsAndEpisodeDetailsReachable" classname="com.personal.wo.DayDrumUiTest" time="0.235"/>
+  <testcase name="detailsShowAllImagesAndShortUsageAndOpenOriginalEvidence" classname="com.personal.wo.DayDrumUiTest" time="0.181"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[[Robolectric] WARN: Android SDK 36 requires Java 21 (have Java 17). Tests won't be run on SDK 36 unless explicitly requested.
+]]></system-err>
+</testsuite>
