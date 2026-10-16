@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.personal.wo.MainActivity
 import com.personal.wo.core.*
 import java.time.*
@@ -29,6 +30,12 @@ import java.time.format.DateTimeFormatter
     var dayParent by rememberSaveable { mutableStateOf("") }
     var chapterId by rememberSaveable { mutableStateOf("") }
     val immersive=page.isBlank()&&tab==0
+    val achievements:AchievementViewModel=viewModel()
+    val awards by achievements.state.collectAsState()
+    val achievementsVisible=page=="achievements"||(page.isBlank()&&tab==3)
+    LaunchedEffect(achievementsVisible,s.loaded,s.demo,s.day?.dayDate,s.day?.revision,s.policy.generation) {
+        achievements.sync(s,achievementsVisible)
+    }
     val snackbar=remember { SnackbarHostState() };val holder=rememberSaveableStateHolder();LaunchedEffect(s.message) { s.message?.let { snackbar.showSnackbar(it);vm.message(null) } }
     LaunchedEffect(tab,page) { vm.section(tab==1||tab==3||page=="insights",tab==2&&page.isBlank()) }
     fun setup() { if(s.demo)vm.demo(false);page="setup" }
@@ -43,12 +50,15 @@ import java.time.format.DateTimeFormatter
             Column(Modifier.widthIn(max=680.dp).fillMaxSize().padding(horizontal=if(immersive)0.dp else 16.dp)) {
                 if(!immersive)Row(Modifier.fillMaxWidth().heightIn(min=56.dp),verticalAlignment=Alignment.CenterVertically) {
                     if(page.isNotBlank())IconButton(onClick={back()}){Icon(Icons.Outlined.ArrowBack,"返回")}
-                    Text(if(page.isBlank())listOf("时间轴","回忆","连接","我的")[tab] else when(page){"chapter"->"事件详情";"summary"->"一天统计";"settings"->"更多设置";"setup"->"记录权限";"search"->"搜索回忆";"episode"->"生活片段";"insights"->"生活趋势";else->"一天的时间线"},Modifier.weight(1f),style=MaterialTheme.typography.titleLarge)
+                    Text(if(page.isBlank())listOf("时间轴","回忆","连接","我的")[tab] else when(page){"achievements"->"我的成就";"chapter"->"事件详情";"summary"->"一天统计";"settings"->"更多设置";"setup"->"记录权限";"search"->"搜索回忆";"episode"->"生活片段";"insights"->"生活趋势";else->"一天的时间线"},Modifier.weight(1f),style=MaterialTheme.typography.titleLarge)
                     if(page.isBlank()){IconButton(onClick={page="search"}){Icon(Icons.Outlined.Search,"搜索记录")};IconButton(onClick={setup()}){Icon(Icons.Outlined.Settings,"记录权限")}}
                 }
                 if(s.busy)LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
                 if(!s.loaded)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
                 else holder.SaveableStateProvider(if(page.isBlank())"tab-$tab" else page) { when(page){
+                    "achievements"->AchievementsPage(s.copy(achievements=awards.snapshot,achievementsLoading=awards.loading,achievementError=awards.error),
+                        achievements::create,achievements::delete,achievements::reading,achievements::showcase,achievements::seen,achievements::refresh,vm::loadApps,
+                        {vm.date(it);tab=0;page=""})
                     "settings"->SettingsPage(s,vm,authorize,background,export,lock,false)
                     "setup"->PermissionCenter(s,authorize,vm::source,background,{(context as? MainActivity)?.requestStatusNotification()},{if(s.policy.requested&&!s.policy.paused)vm.refresh() else vm.recording(if(s.policy.paused)"resume" else "start")},{(context as? MainActivity)?.requestHealthBackground()},{(context as? MainActivity)?.requestMissingPermissions()},vm::reconnectSteps)
                     "insights"->InsightPage(s)
@@ -61,7 +71,8 @@ import java.time.format.DateTimeFormatter
                         0->DayDrumHome(s,{chapterId=it.id;page="chapter"},{page="summary"},{vm.refresh()},{setup()},{vm.demo(it)},vm::date,vm::homeAppMinutes,onAll=::all)
                         1->HistoryPage(s){vm.date(it);tab=0;page=""}
                         2->ConnectionsPage(s,authorize,vm::source,vm::appIncluded,vm::appNotices,vm::loadApps,{setup()},vm::reconnectSteps,{vm.message(it)})
-                        else->MePage(s,{setup()},{page="settings"},{page="insights"},{vm.recording(if(s.policy.paused)"resume" else if(!s.policy.requested)"start" else "pause")},{vm.demo(true);tab=0})
+                        else->MePage(s,{setup()},{page="settings"},{page="insights"},{vm.recording(if(s.policy.paused)"resume" else if(!s.policy.requested)"start" else "pause")},{vm.demo(true);tab=0},
+                            achievementContent={AchievementPreview(awards.snapshot){page="achievements"}})
                     }
                 } }
             }
