@@ -189,12 +189,24 @@ class DayDrumUiTest {
         seedImages();compose.setContent{Shell()}
         compose.onNodeWithContentDescription("下一段经历").performClick()
         val scene=compose.onNodeWithTag("drum-scene").fetchSemanticsNode().boundsInRoot
+        val sides=listOf(1,3).map { index ->
+            compose.onNodeWithTag("wheel-face-$index",useUnmergedTree=true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        }
+        assertTrue(sides[0].center.x<scene.center.x)
+        assertTrue(sides[1].center.x>scene.center.x)
+        assertTrue(sides.all{it.center.y>scene.center.y})
         compose.runOnIdle {
             val view=compose.activity.window.decorView;val b=Bitmap.createBitmap(view.width,view.height,Bitmap.Config.ARGB_8888);view.draw(Canvas(b))
-            val background=b.getPixel((scene.left+4).toInt(),(scene.top+5).toInt())
             fun distance(a:Int,z:Int)=kotlin.math.abs(android.graphics.Color.red(a)-android.graphics.Color.red(z))+kotlin.math.abs(android.graphics.Color.green(a)-android.graphics.Color.green(z))+kotlin.math.abs(android.graphics.Color.blue(a)-android.graphics.Color.blue(z))
-            for(x in listOf(scene.left+36,scene.right-36)) {
-                val different=(-40..40).count{dy->distance(b.getPixel(x.toInt(),(scene.center.y+dy).toInt()),background)>8}
+            // Cards now alternate above/below the rail. Sample each real side face,
+            // and compare with the empty lower-centre gap at the SAME height so
+            // a vertical sky gradient cannot be mistaken for a rendered card.
+            for(side in sides) {
+                val x=side.center.x.toInt()
+                val different=(-40..40).count { dy ->
+                    val y=(side.center.y+dy).toInt()
+                    distance(b.getPixel(x,y),b.getPixel(scene.center.x.toInt(),y))>8
+                }
                 assertTrue("A side card must be visibly drawn, x=$x, changed=$different",different>50)
             }
             b.recycle()

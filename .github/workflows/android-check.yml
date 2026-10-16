@@ -1,7 +1,7 @@
 name: Android verification
 on:
   push:
-    branches: [main, improve/timeline-wheel-motion]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -26,17 +26,22 @@ jobs:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
       - name: Install compile SDK
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Compile and run regression tests
         run: bash gradlew --no-daemon --max-workers=2 :core:test :app:testPersonalEnhancedDebugUnitTest :app:assemblePersonalEnhancedDebug --stacktrace
-      - name: Preserve test reports
+      - name: Preserve test reports and rendered fixtures
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: android-verification-reports
           path: |
             core/build/reports/tests/
+            core/build/test-results/
             app/build/reports/tests/
             app/build/test-results/
+            app/build/ui-previews/
+            app/build/drum-frames/
           if-no-files-found: ignore

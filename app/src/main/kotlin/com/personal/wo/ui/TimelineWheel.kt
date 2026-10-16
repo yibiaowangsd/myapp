@@ -92,7 +92,7 @@ private fun axisAt(x: Float, width: Float, y: Float, arc: Float): Float {
         Canvas(Modifier.fillMaxSize().testTag("wheel-time-axis")) {
             val rail = Path().apply {
                 moveTo(0f, axisY)
-                quadraticBezierTo(size.width / 2f, axisY + 2f * arc, size.width, axisY)
+                quadraticTo(size.width / 2f, axisY + 2f * arc, size.width, axisY)
             }
             drawPath(rail, ink.copy(alpha = .18f), style = Stroke(1.dp.toPx()))
             val position = pager.currentPage + pager.currentPageOffsetFraction
@@ -156,6 +156,7 @@ private fun axisAt(x: Float, width: Float, y: Float, arc: Float): Float {
         // One native gesture owner retains velocity-based decay, interruption, key
         // navigation and accessibility. Real taps are resolved by the parent scene.
         val step = maxWidth * .66f
+        val stepPx = with(density) { step.toPx() }
         HorizontalPager(
             state = pager, pageSize = PageSize.Fixed(step),
             contentPadding = PaddingValues(horizontal = (maxWidth - step) / 2),
@@ -169,19 +170,35 @@ private fun axisAt(x: Float, width: Float, y: Float, arc: Float): Float {
         ) { index ->
             val chapter = latest.getOrNull(index - 1)
             val center = index == pager.currentPage
-            Box(Modifier.fillMaxSize().then(if (center) Modifier.semantics {
-                testTag = "chapter-open"
-                contentDescription = chapter?.let {
-                    "${it.part.label}，${partRange(it.part,day.zoneId)}。${it.summary}" +
-                        it.apps.joinToString("，") { a -> "${a.episode.title}${durationText(a.durationMs)}" } +
-                        if (it.photos.isNotEmpty()) "，${it.photos.size}项影像" else ""
-                } ?: if (index == 0) "回看前一天" else if (hasNextDate) "继续到后一天" else "今天，先到这里"
-                if (chapter != null || index == 0 || hasNextDate) {
-                    onClick(label = if (chapter != null) "查看这个大事件的全部片段" else "查看日期") {
-                        activateLatest(index); true
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(Modifier.width(width).height(height).graphicsLayer {
+                    // Match accessibility and touch-test bounds to the projected face.
+                    // Subtract the native page displacement already applied by Pager.
+                    val offset = index - pager.currentPage - pager.currentPageOffsetFraction
+                    val pose = drumPose(offset)
+                    val x = sceneWidth / 2f + pose.x * sceneWidth
+                    val lane = if (staggered) drumLane(index) else -1f
+                    translationX = pose.x * sceneWidth - offset * stepPx
+                    translationY = axisAt(x, sceneWidth, axisY, arc) +
+                        lane * (heightPx * pose.scale / 2f + gap * (.78f + .22f * pose.depth)) - sceneHeight / 2f
+                    rotationY = pose.rotation
+                    cameraDistance = widthPx * 8f
+                    scaleX = pose.scale
+                    scaleY = pose.scale
+                }.then(if (center) Modifier.semantics {
+                    testTag = "chapter-open"
+                    contentDescription = chapter?.let {
+                        "${it.part.label}，${partRange(it.part,day.zoneId)}。${it.summary}" +
+                            it.apps.joinToString("，") { a -> "${a.episode.title}${durationText(a.durationMs)}" } +
+                            if (it.photos.isNotEmpty()) "，${it.photos.size}项影像" else ""
+                    } ?: if (index == 0) "回看前一天" else if (hasNextDate) "继续到后一天" else "今天，先到这里"
+                    if (chapter != null || index == 0 || hasNextDate) {
+                        onClick(label = if (chapter != null) "查看这个大事件的全部片段" else "查看日期") {
+                            activateLatest(index); true
+                        }
                     }
-                }
-            } else Modifier.clearAndSetSemantics { }))
+                } else Modifier.clearAndSetSemantics { }))
+            }
         }
     }
 }
