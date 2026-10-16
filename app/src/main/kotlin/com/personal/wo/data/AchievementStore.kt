@@ -5,37 +5,45 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import com.personal.wo.core.*
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
-import java.time.LocalDate
+import java.time.Instant
 import java.time.ZoneId
 
 /** Achievement settings live inside the existing SQLCipher database, not plaintext preferences. */
-class AchievementStore(private val repo:WoRepository) {
+class AchievementStore private constructor(
+    private val db:WoDatabase,private val mutex:Mutex,private val policyProvider:()->Policy,
+    private val retentionDays:Int,private val now:()->Long
+) {
+    constructor(repo:WoRepository):this(repo.db,repo.mutex,{repo.cachedPolicy},repo.config.episodeRetentionDays,System::currentTimeMillis)
+    internal constructor(db:WoDatabase,policy:Policy,retentionDays:Int=730,now:()->Long=System::currentTimeMillis):
+        this(db,Mutex(),{policy},retentionDays,now)
     companion object {
         const val SETTINGS_KEY="achievements.settings.v1"
         const val MEMORY_KEY="achievements.memory.v1"
     }
-    private suspend fun settingsUnlocked():AchievementSettings = repo.db.dao().meta(SETTINGS_KEY)?.let {
+    private suspend fun settingsUnlocked():AchievementSettings = db.dao().meta(SETTINGS_KEY)?.let {
         require(it.value.length<=32_768){"成就设置超过大小限制"}
         WoJson.decodeFromString<AchievementSettings>(it.value).checked()
     } ?: AchievementSettings()
-    suspend fun settings():AchievementSettings=repo.mutex.withLock{settingsUnlocked()}
+    suspend fun settings():AchievementSettings=mutex.withLock{settingsUnlocked()}
 
-    suspend fun load():AchievementSnapshot=repo.mutex.withLock {
-        repo.db.withTransaction {
+    suspend fun load():AchievementSnapshot=mutex.withLock {
+        db.withTransaction {
             val settings=settingsUnlocked()
-            val policy=repo.cachedPolicy
-            val today=LocalDate.now(ZoneId.of(policy.archiveZone))
-            val from=today.minusDays((repo.config.episodeRetentionDays.coerceIn(1,36500)-1).toLong())
+            val policy=policyProvider()
+            val asOf=now()
+            val today=Instant.ofEpochMilli(asOf).atZone(ZoneId.of(policy.archiveZone)).toLocalDate()
+            val from=today.minusDays((retentionDays.coerceIn(1,36500)-1).toLong())
             val accumulator=AchievementAccumulator(settings,policy)
             var after=from.minusDays(1).toString()
             // Keyset paging in the active archive zone. Do not reuse the 90-day history UI,
             // offset across duplicate zones, or keep years of full DayViews in memory.
             while(true) {
                 currentCoroutineContext().ensureActive()
-                val page=repo.db.query(SimpleSQLiteQuery(
+                val page=db.query(SimpleSQLiteQuery(
                     "SELECT date,json FROM daily_summary WHERE zone=? AND date>? AND date<=? ORDER BY date ASC LIMIT 24",
                     arrayOf(policy.archiveZone,after,today.toString())
                 )).use { c -> buildList { while(c.moveToNext())add(c.getString(0) to c.getString(1)) } }
@@ -44,23 +52,29 @@ class AchievementStore(private val repo:WoRepository) {
                     currentCoroutineContext().ensureActive()
                     val day=WoJson.decodeFromString<DayView>(json)
                     require(day.dayDate==date&&day.zoneId==policy.archiveZone){"归档索引与内容不一致"}
-                    accumulator.accept(day.copy(asOfMs=minOf(day.asOfMs,System.currentTimeMillis())))
+                    accumulator.accept(day.copy(asOfMs=minOf(day.asOfMs,asOf)))
                 }
                 after=page.last().first
             }
-            val memory=repo.db.dao().meta(MEMORY_KEY)?.let {
+            val memory=db.dao().meta(MEMORY_KEY)?.let {
                 require(it.value.length<=16_384){"成就状态超过大小限制"}
                 WoJson.decodeFromString<AchievementMemory>(it.value).also{m->require(m.version==1)}
             } ?: AchievementMemory()
-            accumulator.snapshot(memory,from.toString(),today.toString())
+            val snapshot=accumulator.snapshot(memory,from.toString(),today.toString())
+            // Deletions/changed evidence may relock a medal. Remove stale display slots
+            // in the same transaction so invisible pins cannot block future choices.
+            val unlocked=snapshot.unlocked.map{it.goal.id}.toSet()
+            val cleaned=settings.copy(showcaseIds=settings.showcaseIds.filter{it in unlocked})
+            if(cleaned!=settings)db.dao().putMeta(MetaRow(SETTINGS_KEY,WoJson.encodeToString(cleaned)))
+            snapshot.copy(settings=cleaned)
         }
     }
-    private suspend fun update(transform:(AchievementSettings)->AchievementSettings)=repo.mutex.withLock {
-        repo.db.withTransaction {
+    private suspend fun update(transform:(AchievementSettings)->AchievementSettings)=mutex.withLock {
+        db.withTransaction {
             val next=transform(settingsUnlocked()).checked()
             val encoded=WoJson.encodeToString(next)
             require(encoded.length<=32_768){"成就设置超过大小限制"}
-            repo.db.dao().putMeta(MetaRow(SETTINGS_KEY,encoded))
+            db.dao().putMeta(MetaRow(SETTINGS_KEY,encoded))
         }
     }
     suspend fun readingApps(packages:Set<String>)=update{it.copy(readingPackages=packages)}
@@ -77,12 +91,12 @@ class AchievementStore(private val repo:WoRepository) {
             require(old.showcaseIds.size<3){"展台最多放3枚徽章，请先取下一枚"};old.showcaseIds+id
         })
     }
-    suspend fun acknowledge(ids:Set<String>)=repo.mutex.withLock {
-        repo.db.withTransaction {
+    suspend fun acknowledge(ids:Set<String>)=mutex.withLock {
+        db.withTransaction {
             val valid=(achievementCatalog+settingsUnlocked().customGoals).map{it.id}.toSet()
-            val old=repo.db.dao().meta(MEMORY_KEY)?.let{WoJson.decodeFromString<AchievementMemory>(it.value)} ?: AchievementMemory()
+            val old=db.dao().meta(MEMORY_KEY)?.let{WoJson.decodeFromString<AchievementMemory>(it.value)} ?: AchievementMemory()
             require(old.version==1)
-            repo.db.dao().putMeta(MetaRow(MEMORY_KEY,WoJson.encodeToString(old.copy(seenIds=(old.seenIds+ids).intersect(valid)))))
+            db.dao().putMeta(MetaRow(MEMORY_KEY,WoJson.encodeToString(old.copy(seenIds=(old.seenIds+ids).intersect(valid)))))
         }
     }
 }

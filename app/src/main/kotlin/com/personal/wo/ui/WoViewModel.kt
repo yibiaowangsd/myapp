@@ -107,7 +107,7 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         mutable.update { it.copy(demo=false) }
         action { g ->
             g.repo.configure { it.copy(enabledSources=sources) }
-            g.repo.command(if(g.repo.cachedPolicy.paused) "resume" else "start")
+            g.repo.command(if(g.repo.cachedPolicy.paused)"resume" else "start")
             g.collector.probe()
             if(!WorkScheduling.schedule(app))message("系统后台调度暂不可用，打开应用时仍会同步")
             RecordingService.start(app)
@@ -169,7 +169,7 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     fun lock(on:Boolean)=action { g -> g.repo.configure { it.copy(lockUi=on) } }
     fun enhancedConfig(endpoint:String,model:String,key:String)=action { g -> val service=EnhancedSummary(g.repo);val old=service.config();service.save(EnhancedConfig(endpoint,key.ifBlank { old.apiKey },model));message("增强配置已保存在本机，访问密钥已加密") }
     fun enhance() { viewModelScope.launch(Dispatchers.IO) { val day=mutable.value.day ?: return@launch;try { val sentences=EnhancedSummary(app.graph().repo).arrange(day);mutable.update { if(it.day?.revision==day.revision&&it.day?.dayDate==day.dayDate)it.copy(day=day.copy(sentences=sentences)) else it };message("已按已知事实调整摘要顺序") }catch(e:Exception){message(e.message ?: "增强未完成，保留本地摘要")} } }
-    fun episode(id:String) { action { g -> mutable.update { it.copy(episode=if(it.demo)it.day?.episodes?.firstOrNull { e -> e.id==id } else g.repo.episode(e.id)) } } }
+    fun episode(id:String) { action { g -> mutable.update { it.copy(episode=if(it.demo)it.day?.episodes?.firstOrNull { e -> e.id==id } else g.repo.episode(id)) } } }
     fun annotate(title:String,confirmed:Boolean,start:Long?=null,end:Long?=null)=action { g -> val e=mutable.value.episode ?: return@action;g.repo.annotate(e,title,confirmed,start=start,end=end);mutable.update { it.copy(episode=g.repo.episode(e.id)) };message("片段已更新") }
     fun favorite()=action { g -> val e=mutable.value.episode ?: return@action;g.repo.annotate(e,null,false,!e.isFavorite);mutable.update { it.copy(episode=g.repo.episode(e.id)) } }
     fun namePlace(name:String)=action { g -> val e=mutable.value.episode ?: return@action;g.repo.namePlace(e,name);message("地点已命名，后续停留将自动匹配") }
