@@ -1,5 +1,6 @@
 package com.personal.wo.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
@@ -14,18 +15,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import com.personal.wo.core.*
 import java.time.LocalDate
-import java.util.UUID
 
 @Composable fun AchievementPreview(snapshot:AchievementSnapshot?,open:()->Unit) {
     val earned=snapshot?.unlocked.orEmpty()
@@ -62,6 +57,11 @@ import java.util.UUID
     var creating by rememberSaveable { mutableStateOf(false) }
     var reading by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf<String?>(null) }
+    if(creating) {
+        BackHandler { creating=false }
+        AchievementCreator(onDismiss={creating=false},onSave={onCreate(it);creating=false})
+        return
+    }
     val large=LocalDensity.current.fontScale>=1.3f
     val displayed=snapshot?.items.orEmpty().filter {
         (family=="ALL"||it.goal.metric.name==family)&&when(filter){"EARNED"->it.unlocked;"PENDING"->!it.unlocked;"CUSTOM"->it.goal.custom;else->true}
@@ -162,43 +162,9 @@ import java.util.UUID
             if(selected.goal.custom)TextButton(onClick={deleting=selected.goal.id},enabled=!s.demo){Text("删除这个自定义成就",color=MaterialTheme.colorScheme.error)}
         }
     }
-    if(creating)AchievementCreator(onDismiss={creating=false},onSave={onCreate(it);creating=false})
     if(reading&&snapshot!=null)ReadingAchievementApps(s,snapshot.settings.readingPackages,{reading=false}){onReadingApps(it);reading=false}
     if(deleting!=null)AlertDialog(onDismissRequest={deleting=null},title={Text("删除自定义成就？")},text={Text("只删除这个目标和展台展示，不会删除任何生活记录。")},
         confirmButton={TextButton(onClick={deleting?.let(onDelete);deleting=null;selectedId=null}){Text("删除")}},dismissButton={TextButton(onClick={deleting=null}){Text("取消")}})
-}
-
-@Composable private fun AchievementCreator(onDismiss:()->Unit,onSave:(AchievementGoal)->Unit) {
-    var name by rememberSaveable{mutableStateOf("")};var description by rememberSaveable{mutableStateOf("")}
-    var target by rememberSaveable{mutableStateOf("")};var metricName by rememberSaveable{mutableStateOf(AchievementMetric.DAYS.name)}
-    var expanded by remember{mutableStateOf(false)};val metric=AchievementMetric.valueOf(metricName)
-    val candidate=remember(name,description,target,metric){runCatching{AchievementGoal("custom-draft",name,description.ifBlank{"这是为自己设定的一份日常约定。"},metric,target.toLongOrNull()?:0,1,true).checked()}.getOrNull()}
-    val maximumHeight=(LocalConfiguration.current.screenHeightDp.dp*.85f).coerceAtMost(620.dp)
-    // An explicitly bounded form avoids AlertDialog's intrinsic text measurement
-    // feeding back into multiple text fields inside a scrolling column.
-    Dialog(onDismissRequest=onDismiss) {
-        Surface(Modifier.fillMaxWidth().heightIn(max=maximumHeight),shape=RoundedCornerShape(28.dp),color=MaterialTheme.colorScheme.surfaceContainerHigh) {
-            Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
-                Text("给自己一个小目标",style=MaterialTheme.typography.headlineSmall)
-                Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(name,{name=it.take(28)},label={Text("成就名称")},singleLine=true,modifier=Modifier.fillMaxWidth().testTag("custom-achievement-name"))
-                    OutlinedTextField(description,{description=it.take(180)},label={Text("写给自己的话（可选）")},minLines=2,modifier=Modifier.fillMaxWidth())
-                    Box {
-                        OutlinedButton(onClick={expanded=true},modifier=Modifier.fillMaxWidth()){Text("统计依据 · ${metric.label}")}
-                        DropdownMenu(expanded,{expanded=false}){AchievementMetric.entries.forEach{m->DropdownMenuItem(text={Text(m.label)},onClick={metricName=m.name;expanded=false})}}
-                    }
-                    OutlinedTextField(target,{target=it.filter(Char::isDigit).take(10)},label={Text("目标（${metric.unit}）")},singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),modifier=Modifier.fillMaxWidth().testTag("custom-achievement-target"))
-                    Text(metric.note,style=MaterialTheme.typography.bodySmall)
-                    Text("使用当前保留记录累计，不从创建日清零。图标随所选系列生成。",style=MaterialTheme.typography.bodySmall)
-                }
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End,verticalAlignment=Alignment.CenterVertically) {
-                    TextButton(onClick=onDismiss){Text("取消")}
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick={candidate?.let{onSave(it.copy(id="custom-${UUID.randomUUID()}"))}},enabled=candidate!=null,modifier=Modifier.testTag("custom-achievement-save")){Text("创建")}
-                }
-            }
-        }
-    }
 }
 
 @Composable private fun ReadingAchievementApps(s:WoUiState,current:Set<String>,dismiss:()->Unit,save:(Set<String>)->Unit) {
