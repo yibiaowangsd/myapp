@@ -24,11 +24,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.personal.wo.core.*
 import java.time.LocalDate
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 private fun axisAt(x: Float, width: Float, y: Float, arc: Float): Float {
     val u = (x - width / 2f) / (width / 2f).coerceAtLeast(1f)
@@ -114,16 +116,29 @@ private fun axisAt(x: Float, width: Float, y: Float, arc: Float): Float {
                 DisposableEffect(pager, index) { onDispose { faces.remove(index) } }
                 val visual = Modifier.width(width).height(height)
                     .zIndex(1f / (1f + abs(index - pager.currentPage)))
-                    .graphicsLayer {
-                        // Read continuous state in the layer: text and image layout do not
-                        // need to run on every frame of a drag or inertial settle.
+                    .absoluteOffset {
+                        // Place the layout before its translucent offscreen layer.
+                        // Otherwise translated side faces can be cropped against the
+                        // former centre-card rectangle during native canvas drawing.
                         val pose = drumPose(index - pager.currentPage - pager.currentPageOffsetFraction)
                         val x = sceneWidth / 2f + pose.x * sceneWidth
                         val lane = if (staggered) drumLane(index) else -1f
                         val y = axisAt(x, sceneWidth, axisY, arc) +
                             lane * (heightPx * pose.scale / 2f + gap * (.78f + .22f * pose.depth))
-                        translationX = pose.x * sceneWidth
-                        translationY = y - sceneHeight / 2f
+                        IntOffset((pose.x * sceneWidth).roundToInt(), (y - sceneHeight / 2f).roundToInt())
+                    }
+                    .graphicsLayer {
+                        // Placement and layer state are deferred; text/image measurement
+                        // need not run for each frame. Preserve subpixel movement here.
+                        val pose = drumPose(index - pager.currentPage - pager.currentPageOffsetFraction)
+                        val x = sceneWidth / 2f + pose.x * sceneWidth
+                        val lane = if (staggered) drumLane(index) else -1f
+                        val y = axisAt(x, sceneWidth, axisY, arc) +
+                            lane * (heightPx * pose.scale / 2f + gap * (.78f + .22f * pose.depth))
+                        val dx = pose.x * sceneWidth
+                        val dy = y - sceneHeight / 2f
+                        translationX = dx - dx.roundToInt()
+                        translationY = dy - dy.roundToInt()
                         rotationY = pose.rotation
                         // Camera distance is in pixels and must comfortably exceed a card.
                         cameraDistance = widthPx * 8f
