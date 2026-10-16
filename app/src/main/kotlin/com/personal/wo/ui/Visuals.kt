@@ -1,6 +1,7 @@
 package com.personal.wo.ui
 
 import android.graphics.Bitmap
+import android.content.ComponentCallbacks2
 import android.net.Uri
 import android.util.LruCache
 import android.util.Size as AndroidSize
@@ -31,13 +32,23 @@ import kotlinx.coroutines.sync.withPermit
 import java.time.*
 import java.time.format.DateTimeFormatter
 
-object ThumbnailCache{val cache=object:LruCache<String,Bitmap>(24*1024*1024){override fun sizeOf(key:String,value:Bitmap)=value.allocationByteCount};val gate=Semaphore(1)}
+object ThumbnailCache {
+    val cache=object:LruCache<String,Bitmap>(24*1024*1024){override fun sizeOf(key:String,value:Bitmap)=value.allocationByteCount}
+    val gate=Semaphore(1)
+    fun trim(level:Int) {
+        when {
+            level==ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> Unit
+            level>=ComponentCallbacks2.TRIM_MEMORY_COMPLETE||level==ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> cache.evictAll()
+            level>=ComponentCallbacks2.TRIM_MEMORY_BACKGROUND||level==ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW||level==ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE -> cache.trimToSize(cache.maxSize()/2)
+        }
+    }
+}
 @Composable fun PhotoThumbnail(uri:String,modifier:Modifier=Modifier.fillMaxWidth().heightIn(min=100.dp,max=260.dp),crop:Boolean=false) {
     val context=LocalContext.current
     var finished by remember(uri){mutableStateOf(false)}
     val bitmap by produceState<Bitmap?>(ThumbnailCache.cache.get(uri),uri) {
         value=value?:withContext(Dispatchers.IO){ThumbnailCache.gate.withPermit{
-            runCatching{context.contentResolver.loadThumbnail(Uri.parse(uri),AndroidSize(512,512),null).also{ThumbnailCache.cache.put(uri,it)}}.getOrNull()
+            ThumbnailCache.cache.get(uri) ?: runCatching{context.contentResolver.loadThumbnail(Uri.parse(uri),AndroidSize(512,512),null).also{ThumbnailCache.cache.put(uri,it)}}.getOrNull()
         }}
         finished=true
     }

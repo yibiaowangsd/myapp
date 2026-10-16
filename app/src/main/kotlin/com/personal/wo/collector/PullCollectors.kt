@@ -82,6 +82,7 @@ class PullCollectors(private val c:Context,private val repo:WoRepository) {
         val status=repo.source(Source.PHOTO); if(status.authorization !in listOf("GRANTED","PARTIAL"))return
         val p=repo.cachedPolicy; val now=System.currentTimeMillis(); val cursor=status.cursor.split(":")
         var mod=since?.div(1000) ?: cursor.firstOrNull()?.toLongOrNull() ?: (now-7*86_400_000L)/1000; var lastId=if(since!=null) 0L else cursor.getOrNull(1)?.toLongOrNull() ?: 0L
+        val mediaVersion=MediaStore.getVersion(c)
         repeat(3) {
             val uri=MediaStore.Files.getContentUri("external")
             val args=Bundle().apply {
@@ -97,7 +98,7 @@ class PullCollectors(private val c:Context,private val repo:WoRepository) {
                     val captured=dateTaken>0&&dateTaken<now+300_000
                     val t=if(captured) dateTaken else added
                     mod=q.long("date_modified"); lastId=id
-                    val native="${MediaStore.getVersion(c)}:$id"; val key=repo.vault.sourceKey("photo",native)
+                    val native="$mediaVersion:$id"; val key=repo.vault.sourceKey("photo",native)
                     batch+=Observation(stableId(Source.PHOTO,key),Source.PHOTO,key,Kind.PHOTO,t,receivedMs=now,payload=Payload(uri=ContentUris.withAppendedId(uri,id).toString(),captured=captured,category=if(q.long("media_type")==3L) "VIDEO" else "IMAGE"))
                 }
             }

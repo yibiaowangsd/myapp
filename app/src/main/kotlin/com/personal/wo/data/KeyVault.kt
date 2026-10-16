@@ -1,6 +1,7 @@
 package com.personal.wo.data
 
 import android.content.Context
+import com.personal.wo.core.lowerHex
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.io.File
@@ -19,7 +20,7 @@ class KeyVault(private val context: Context) {
     private val alias = "wo.database.wrapper.v1"
     private val file = File(context.noBackupFilesDir, "vault-v1.bin")
     val deviceId:String=synchronized(lock) { val f=File(context.noBackupFilesDir,"source-device-id");if(f.exists())f.readText() else java.util.UUID.randomUUID().toString().also { f.writeText(it) } }
-    private val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+    private val store by lazy { KeyStore.getInstance("AndroidKeyStore").apply { load(null) } }
     @Synchronized private fun wrapper(): SecretKey {
         if (store.containsAlias(alias)) return store.getKey(alias, null) as SecretKey
         check(!file.exists()) { "D002:密钥不可用，原文件已保留；请从加密备份恢复" }
@@ -55,7 +56,7 @@ class KeyVault(private val context: Context) {
     fun password(): ByteArray = secrets().let { val s = Base64.encode(it.copyOfRange(0,32),Base64.NO_WRAP); it.fill(0); s }
     fun sourceKey(vararg fields: Any?): String {
         val secret = seed()
-        return try { Mac.getInstance("HmacSHA256").run { init(SecretKeySpec(secret,"HmacSHA256")); doFinal((deviceId+"\u0000"+fields.joinToString("\u0000")).toByteArray()).joinToString("") { "%02x".format(it) } } } finally { secret.fill(0) }
+        return try { Mac.getInstance("HmacSHA256").run { init(SecretKeySpec(secret,"HmacSHA256")); doFinal((deviceId+"\u0000"+fields.joinToString("\u0000")).toByteArray()).lowerHex() } } finally { secret.fill(0) }
     }
     fun writeProtected(name:String,plain:ByteArray) {
         require(name=="enhanced-config");require(plain.size<=16384)

@@ -20,8 +20,12 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
     @Volatile var cachedPolicy = Policy(); private set
     val engine = DayEngine(config)
     private val dao get() = db.dao()
+    private val recentDays=RecentDayCache()
+    private fun dayKey(date:LocalDate,zone:String)="day.snapshot.v1:$zone:$date"
+    private fun snapshotPolicy()="${cachedPolicy.generation}:${config.version}"
     private fun notifyChange() { changes.value += 1 }
     suspend fun initialize() { mutex.withLock {
+        recentDays.clear()
         cachedPolicy = dao.policy()?.let { WoJson.decodeFromString(it.json) } ?: Policy()
         dao.putPolicy(PolicyRow(json = WoJson.encodeToString(cachedPolicy)))
         dao.putMeta(MetaRow("engineVersion",config.version))
@@ -118,34 +122,53 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
         dao.removeIndex(e.id); dao.putIndex(SearchRow(episodeId=e.id,tokens=NoticeRules.tokens(text)))
         dao.clearEvidence(e.id); dao.putEvidence(e.evidence.map { EvidenceRow(e.id,it.id,WoJson.encodeToString(it)) })
     }
-    suspend fun day(date: LocalDate,force: Boolean=true): DayView = mutex.withLock {
+    /** Read an already-built encrypted snapshot without provider queries or rebuilding. */
+    suspend fun cachedDay(date:LocalDate):DayView?=mutex.withLock {
+        val p=cachedPolicy;val row=dao.summary(date.toString(),p.archiveZone) ?: return@withLock null
+        val stamp=dao.meta(dayKey(date,p.archiveZone))?.value
+        // Older releases have no stamp. Only reuse their unrestricted snapshots.
+        if(stamp!=snapshotPolicy() && !(stamp==null&&p.exclusions.isEmpty()&&p.excludedApps.isEmpty()))return@withLock null
+        WoJson.decodeFromString<DayView>(row.json)
+    }
+    /** Repeated UI refreshes reuse the same revision until data/policy or the live clock changes. */
+    suspend fun currentDay(date:LocalDate):DayView=mutex.withLock {
+        val p=cachedPolicy;val now=System.currentTimeMillis();val zone=ZoneId.of(p.archiveZone)
+        recentDays.get(dayKey(date,zone.id),changes.value,p.generation,now,date==Instant.ofEpochMilli(now).atZone(zone).toLocalDate())
+            ?: buildDay(date,true)
+    }
+    suspend fun day(date:LocalDate,force:Boolean=true):DayView=mutex.withLock { buildDay(date,force) }
+    private suspend fun buildDay(date: LocalDate,force: Boolean): DayView {
         val p=cachedPolicy; val zone=ZoneId.of(p.archiveZone); val w=window(date,zone)
         val cached=dao.summary(date.toString(),zone.id)
-        if (cached!=null && !force && p.exclusions.none { it.startMs<w.end&&(it.endMs?:Long.MAX_VALUE)>w.start }) return@withLock WoJson.decodeFromString(cached.json)
+        if (cached!=null && !force && p.exclusions.none { it.startMs<w.end&&(it.endMs?:Long.MAX_VALUE)>w.start }) return WoJson.decodeFromString(cached.json)
         val start=(w.start-86_400_000L).coerceAtLeast(0)
         val raw=dao.observations(start,w.end+86_400_000L).map { WoJson.decodeFromString<Observation>(it.json) }
         val ann=dao.annotations().map { WoJson.decodeFromString<Annotation>(it.json) }
         val cs=dao.coverage(w.start,w.end).map { WoJson.decodeFromString<Coverage>(it.json) }
         val places=places(); val now=System.currentTimeMillis()
-        val retired=dao.episodes(w.start,w.end).map { WoJson.decodeFromString<Episode>(it.json) }.filter { e->e.evidence.any { !it.rawAvailable } }
+        val previous=dao.episodes(w.start,w.end).associateBy { it.id }
+        val retired=previous.values.map { WoJson.decodeFromString<Episode>(it.json) }.filter { e->e.evidence.any { !it.rawAvailable } }
         val archivedMetrics=if(cached!=null && w.end<now-config.rawRetentionDays*86_400_000L && p.exclusions.none { (it.source==null||it.source in setOf(Source.HEALTH,Source.STEPS))&&it.startMs<w.end&&(it.endMs?:Long.MAX_VALUE)>w.start })WoJson.decodeFromString<DayView>(cached.json).metrics else emptyList()
-        val view=engine.build(date,p,raw,places,sources(),cs,ann,now,(cached?.revision ?: 0)+1,retired,archivedMetrics)
+        val fresh=engine.episodes(raw,p,places,now)
+        val view=engine.build(date,p,raw,places,sources(),cs,ann,now,(cached?.revision ?: 0)+1,retired,archivedMetrics,freshEpisodes=fresh)
         db.withTransaction {
-            val originals=engine.episodes(raw,p,places,now).filter { it.endMs>=w.start && it.startMs<w.end }
+            val originals=fresh.filter { it.endMs>=w.start && it.startMs<w.end }
             val validIds=(originals+retired).map { it.id }.toSet()
-            val stale=dao.episodes(w.start,w.end).filter { it.id !in validIds }.map { it.id }
+            val stale=previous.values.filter { it.id !in validIds }.map { it.id }
             stale.forEach { dao.removeIndex(it) };dao.deleteRelations(stale);dao.deleteEpisodes(stale)
             originals.forEach { e ->
                 val a=ann.lastOrNull { it.episodeId==e.id }
-                val old=dao.episode(e.id)
+                val old=previous[e.id] ?: dao.episode(e.id)
                 val final=if(a==null) e else e.copy(title=a.title ?: e.title,startMs=a.startMs ?: e.startMs,endMs=a.endMs ?: e.endMs,assertion=if(a.confirmed) Assertion.CONFIRMED else e.assertion,isFavorite=a.favorite ?: e.isFavorite)
                 val prior=old?.let { WoJson.decodeFromString<Episode>(it.json) }
                 if(prior==null || prior.copy(revision=1)!=final.copy(revision=1)) saveEpisode(final.copy(revision=(old?.revision ?: 0)+1))
             }
             dao.putSummary(SummaryRow(date.toString(),zone.id,view.revision,view.asOfMs,WoJson.encodeToString(view)))
+            dao.putMeta(MetaRow(dayKey(date,zone.id),snapshotPolicy()))
             dao.putMetrics(view.metrics.map { MetricRow(date.toString(),zone.id,it.key,WoJson.encodeToString(it)) })
         }
-        view
+        recentDays.put(dayKey(date,zone.id),view,changes.value,p.generation,System.currentTimeMillis())
+        return view
     }
     suspend fun history(): List<DayView> = dao.summaries(90).map { WoJson.decodeFromString(it.json) }
     suspend fun episode(id: String): Episode? = dao.episode(id)?.let { WoJson.decodeFromString(it.json) }

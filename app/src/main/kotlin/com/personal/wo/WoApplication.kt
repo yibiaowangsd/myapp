@@ -2,6 +2,7 @@ package com.personal.wo
 
 import android.app.Application
 import android.content.Context
+import com.personal.wo.ui.ThumbnailCache
 import android.os.UserManager
 import androidx.room.Room
 import androidx.work.Configuration
@@ -47,6 +48,11 @@ class WoApplication : Application(), Configuration.Provider {
         if (currentGraph==null && ready.isCompleted && !initializing) ready=CompletableDeferred()
         initialize()
     }
+    override fun onTrimMemory(level:Int) {
+        super.onTrimMemory(level)
+        ThumbnailCache.trim(level)
+    }
+    override fun onLowMemory() { super.onLowMemory();ThumbnailCache.cache.evictAll() }
     fun submit(observation: Observation) { currentGraph?.offer(observation) }
 }
 

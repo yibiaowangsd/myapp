@@ -188,9 +188,9 @@ class DayEngine(val config: EngineConfig = EngineConfig()) {
         return out + moves
     }
 
-    fun build(date: LocalDate, policy: Policy, observations: List<Observation>, places: List<Place>, states: List<SourceState>, coverage: List<Coverage>, annotations: List<Annotation>, now: Long, revision: Long = 1, retained:List<Episode> = emptyList(),retainedMetrics:List<Metric> = emptyList()): DayView {
+    fun build(date: LocalDate, policy: Policy, observations: List<Observation>, places: List<Place>, states: List<SourceState>, coverage: List<Coverage>, annotations: List<Annotation>, now: Long, revision: Long = 1, retained:List<Episode> = emptyList(),retainedMetrics:List<Metric> = emptyList(),freshEpisodes:List<Episode>?=null): DayView {
         val zone = ZoneId.of(policy.archiveZone); val w = window(date, zone); val asOf = minOf(now, w.end).coerceAtLeast(w.start)
-        val fresh = episodes(observations, policy, places, now)
+        val fresh = freshEpisodes ?: episodes(observations, policy, places, now)
         val original = fresh + retained.filter { e -> fresh.none { it.id==e.id } && policy.exclusions.none { x ->
             (x.source==null||e.evidence.any { it.source==x.source }) && (x.packageName==null||e.packageName==x.packageName) && (x.sourceKey==null||e.evidence.any { it.sourceKey==x.sourceKey }) &&
             (if(e.startMs==e.endMs)Span(x.startMs,x.endMs?:Long.MAX_VALUE).contains(e.startMs) else Span(e.startMs,e.endMs).intersect(Span(x.startMs,x.endMs?:Long.MAX_VALUE))!=null)

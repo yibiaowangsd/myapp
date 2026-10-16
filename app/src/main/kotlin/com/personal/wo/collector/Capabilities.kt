@@ -1,6 +1,7 @@
 package com.personal.wo.collector
 
 import android.Manifest
+import kotlinx.coroutines.withTimeoutOrNull
 import android.app.AppOpsManager
 import android.content.ComponentName
 import android.content.Context
@@ -59,7 +60,8 @@ object Capabilities {
             Source.CALENDAR -> s(source,granted(c,Manifest.permission.READ_CALENDAR),detail="日历只作为计划，不认定实际出席")
             Source.HEALTH -> {
                 val available=HealthConnectClient.getSdkStatus(c)==HealthConnectClient.SDK_AVAILABLE
-                val permissions=if(available)HealthConnectClient.getOrCreate(c).permissionController.getGrantedPermissions() else emptySet()
+                val permissions=if(available)withTimeoutOrNull(1_500) { HealthConnectClient.getOrCreate(c).permissionController.getGrantedPermissions() }
+                    ?: return@probeSource SourceState(source,supported=true,authorization="UNKNOWN",runtime="STOPPED",detail="健康服务响应较慢，稍后同步；其他来源继续使用") else emptySet()
                 s(source,permissions.isNotEmpty()&&permissions.any { it in healthPermissions() },available,if(!available)"Health Connect未提供；其他功能可以继续" else "步数聚合、运动与睡眠来源")
             }
             Source.ACCESSIBILITY -> s(source,window(c),detail="可选窗口包名；不读取屏幕正文、不执行手势")

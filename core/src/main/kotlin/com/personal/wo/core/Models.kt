@@ -81,8 +81,17 @@ val WoJson = Json { ignoreUnknownKeys = false; encodeDefaults = true }
 }
 
 fun window(date: LocalDate, zone: ZoneId): Span = Span(date.atStartOfDay(zone).toInstant().toEpochMilli(), date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli())
-fun stableId(vararg values: Any?): String = MessageDigest.getInstance("SHA-256").digest(values.joinToString("\u0000").toByteArray()).take(16).joinToString("") { "%02x".format(it) }
+fun stableId(vararg values: Any?): String = MessageDigest.getInstance("SHA-256").digest(values.joinToString("\u0000").toByteArray()).copyOf(16).lowerHex()
 fun durationText(ms: Long): String {
     val m = (ms.coerceAtLeast(0) + 30_000) / 60_000
     return if (m >= 60) "${m / 60}小时${if (m % 60 > 0) "${m % 60}分钟" else ""}" else "${m}分钟"
+}
+
+/** Lowercase byte encoding without allocating a Formatter for every byte. */
+fun ByteArray.lowerHex():String {
+    val digits="0123456789abcdef"
+    return CharArray(size*2) { index ->
+        val byte=this[index/2].toInt() and 255
+        digits[if(index%2==0)byte ushr 4 else byte and 15]
+    }.concatToString()
 }

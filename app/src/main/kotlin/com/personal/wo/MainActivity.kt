@@ -112,7 +112,7 @@ class MainActivity:ComponentActivity() {
         }
     }
     override fun onResume() { super.onResume();if(::vm.isInitialized) { if(vm.state.value.policy.lockUi&&stoppedAt>0&&SystemClock.elapsedRealtime()-stoppedAt>60_000) { unlocked.value=false;authenticate() };vm.foreground() } }
-    override fun onStop() { stoppedAt=SystemClock.elapsedRealtime();prompt?.cancel();if(::vm.isInitialized)vm.background();ThumbnailCache.cache.evictAll();super.onStop() }
+    override fun onStop() { stoppedAt=SystemClock.elapsedRealtime();prompt?.cancel();if(::vm.isInitialized)vm.background();super.onStop() }
     private fun authenticate() {
         recoverableCall { showAuthentication() }.onFailure { wo().diagnostics.record("查看身份验证",it);if(::vm.isInitialized)vm.message("系统身份验证暂不可用，请重试") }
     }

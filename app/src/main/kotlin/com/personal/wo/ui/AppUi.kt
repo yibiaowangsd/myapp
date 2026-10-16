@@ -38,7 +38,7 @@ import java.time.format.DateTimeFormatter
         achievements.sync(s,achievementsVisible)
     }
     val snackbar=remember { SnackbarHostState() };val holder=rememberSaveableStateHolder();LaunchedEffect(s.message) { s.message?.let { snackbar.showSnackbar(it);vm.message(null) } }
-    LaunchedEffect(tab,page) { vm.section(page=="insights",page=="connections") }
+    LaunchedEffect(tab,page) { vm.section(page=="insights",page=="connections",page=="day",page.isBlank()&&tab==2) }
     fun setup() { if(s.demo)vm.demo(false);setupParent=page;page="setup" }
     fun open(e:Episode) { parent=page;page="episode";vm.episode(e.id) }
     fun all() { dayParent=page;page="day" }

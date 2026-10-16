@@ -35,6 +35,12 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     private var searchJob:Job?=null
     private var initializationJob:Job?=null
     private var foregroundJob:Job?=null
+    private var initialReady=CompletableDeferred<Unit>()
+    @Volatile private var synchronizing=false
+    @Volatile private var positionsVisible=false
+    @Volatile private var diagnosticsVisible=false
+    @Volatile private var workScheduled=false
+    @Volatile private var syncGeneration=0L
     private val reloadMutex=Mutex()
     @Volatile private var historyVisible=false
     private var appsJob:Job?=null
@@ -45,11 +51,14 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         initializationJob?.cancel()
         initializationJob=viewModelScope.launch(Dispatchers.IO) {
             recoverableTask {
-                val g=app.graph();g.collector.probe()
+                val g=app.graph()
                 val zone=ZoneId.of(g.repo.cachedPolicy.archiveZone);mutable.update { it.copy(policy=g.repo.cachedPolicy,selectedDate=LocalDate.now(zone).toString()) }
-                reload(false)
-                g.repo.changes.debounce(500).collect { if(visible)reload(false) }
-            }.onFailure { failure("载入首页",it) }
+                val date=LocalDate.parse(mutable.value.selectedDate)
+                val first=g.repo.cachedDay(date) ?: g.repo.currentDay(date)
+                mutable.update { it.copy(day=first,policy=g.repo.cachedPolicy,loaded=true,startupError=null) }
+                initialReady.complete(Unit)
+                g.repo.changes.drop(1).debounce(700).collect { if(visible&&!synchronizing)reload() }
+            }.onFailure { failure("载入首页",it);initialReady.complete(Unit) }
         }
     }
     private fun failure(stage:String,error:Throwable) {
@@ -60,29 +69,63 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     fun retryStartup() {
         loadJob?.cancel();foregroundJob?.cancel()
         mutable.update { it.copy(loaded=false,busy=false,startupError=null) }
-        app.retryInitialization();initialize();foreground()
+        initialReady=CompletableDeferred();app.retryInitialization();initialize();foreground()
     }
-    private suspend fun reload(pull:Boolean,forcePull:Boolean=false) = reloadMutex.withLock {
+    // Only local presentation work owns this mutex. Provider IPC never blocks date changes.
+    private suspend fun reload() = reloadMutex.withLock {
         if(mutable.value.demo)return@withLock
         val g=app.graph();val date=LocalDate.parse(mutable.value.selectedDate)
-        val cached=g.repo.day(date,false)
-        mutable.update { it.copy(day=if(it.selectedDate==date.toString())cached else it.day,loaded=true,startupError=null,policy=g.repo.cachedPolicy) }
-        if(pull) { g.collector.probe();withTimeoutOrNull(20_000) { g.collector.pull(true,forcePull) } }
-        val day=g.repo.day(date);val history=if(historyVisible)g.repo.history() else mutable.value.history;val sources=g.repo.sources();val places=g.repo.places();val ops=g.db.dao().operations()
-        val positions=g.db.dao().positions(day.windowStartMs,day.windowEndMs).map { WoJson.decodeFromString<Observation>(it.json) }.flatMap { filterObservation(it,g.repo.cachedPolicy) }
-        mutable.update { it.copy(positions=if(it.selectedDate==date.toString())positions else it.positions,day=if(it.selectedDate==date.toString()) day else it.day,history=history,policy=g.repo.cachedPolicy,sources=sources,places=places,insights=if(historyVisible)insights(history) else it.insights,databaseBytes=app.getDatabasePath("wo.db").length()+app.getDatabasePath("wo.db-wal").length(),diagnostics=ops.map { o -> "${Instant.ofEpochMilli(o.timeMs).atZone(ZoneId.of(g.repo.cachedPolicy.archiveZone)).toLocalTime().withNano(0)} · ${o.code}${if(o.count>0) " · ${o.count}" else ""}" }) }
+        val day=g.repo.currentDay(date)
+        val sources=g.repo.sources()
+        mutable.update { if(it.demo||it.selectedDate!=date.toString())it else it.copy(day=day,loaded=true,startupError=null,policy=g.repo.cachedPolicy,sources=sources) }
+        val history=if(historyVisible)g.repo.history() else mutable.value.history
+        val positions=if(positionsVisible)g.db.dao().positions(day.windowStartMs,day.windowEndMs).map { WoJson.decodeFromString<Observation>(it.json) }.flatMap { filterObservation(it,g.repo.cachedPolicy) } else emptyList()
+        val diagnostics=if(diagnosticsVisible)g.db.dao().operations().map { o -> "${Instant.ofEpochMilli(o.timeMs).atZone(ZoneId.of(g.repo.cachedPolicy.archiveZone)).toLocalTime().withNano(0)} · ${o.code}${if(o.count>0) " · ${o.count}" else ""}" } else mutable.value.diagnostics
+        mutable.update { if(it.demo||it.selectedDate!=date.toString())it else it.copy(positions=positions,history=history,
+            insights=if(historyVisible)insights(history) else it.insights,diagnostics=diagnostics,
+            databaseBytes=if(diagnosticsVisible)app.getDatabasePath("wo.db").length()+app.getDatabasePath("wo.db-wal").length() else it.databaseBytes) }
     }
-    fun refresh(pull:Boolean=true,forcePull:Boolean=true) { loadJob?.cancel();loadJob=viewModelScope.launch(Dispatchers.IO) { mutable.update { it.copy(busy=true) };try { recoverableTask { reload(pull,forcePull) }.onFailure { failure("刷新日视图",it) } } finally { mutable.update { it.copy(busy=false) } } } }
-    fun foreground() {
-        visible=true
+    fun refresh(pull:Boolean=true,forcePull:Boolean=true) {
+        if(pull){synchronize(forcePull);return}
+        loadJob?.cancel()
+        loadJob=viewModelScope.launch(Dispatchers.IO) {
+            initialReady.await()
+            recoverableTask { reload() }.onFailure { failure("刷新日视图",it) }
+        }
+    }
+    private fun synchronize(force:Boolean) {
+        if(foregroundJob?.isActive==true&&!force)return
         foregroundJob?.cancel()
-        foregroundJob=viewModelScope.launch(Dispatchers.IO) { recoverableTask { val g=app.graph();g.collector.probe();if(g.repo.cachedPolicy.requested&&!g.repo.cachedPolicy.paused) {
-            if(g.repo.cachedPolicy.lastAliveMs>0&&System.currentTimeMillis()-g.repo.cachedPolicy.lastAliveMs>45*60_000)g.repo.coverage(Source.NOTIFICATION,g.repo.cachedPolicy.lastAliveMs,System.currentTimeMillis(),false,"监听状态可能中断；未收到不代表没有消息")
-            RecordingService.start(app);if(!WorkScheduling.schedule(app))message("系统后台调度暂不可用，打开应用时仍会同步")
-        } }.onFailure { failure("前台恢复",it) } }
-        refresh(true,false)
+        val generation=++syncGeneration
+        foregroundJob=viewModelScope.launch(Dispatchers.IO) {
+            initialReady.await()
+            if(mutable.value.startupError!=null||mutable.value.demo||!visible)return@launch
+            synchronizing=true;mutable.update { it.copy(busy=true) }
+            try {
+                recoverableTask {
+                    val g=app.graph()
+                    g.collector.probe()
+                    if(g.repo.cachedPolicy.requested&&!g.repo.cachedPolicy.paused) {
+                        if(g.repo.cachedPolicy.lastAliveMs>0&&System.currentTimeMillis()-g.repo.cachedPolicy.lastAliveMs>45*60_000)
+                            g.repo.coverage(Source.NOTIFICATION,g.repo.cachedPolicy.lastAliveMs,System.currentTimeMillis(),false,"监听状态可能中断；未收到不代表没有消息")
+                        RecordingService.start(app)
+                        if(!workScheduled) {
+                            workScheduled=WorkScheduling.schedule(app)
+                            if(!workScheduled)message("系统后台调度暂不可用，打开应用时仍会同步")
+                        }
+                        withTimeoutOrNull(20_000) { g.collector.pull(true,force) }
+                    }
+                    reload()
+                }.onFailure { failure("同步来源",it) }
+            } finally {
+                if(generation==syncGeneration) {
+                    synchronizing=false;mutable.update { it.copy(busy=false) }
+                }
+            }
+        }
     }
-    fun background() { visible=false;loadJob?.cancel();searchJob?.cancel();foregroundJob?.cancel() }
+    fun foreground() { visible=true;synchronize(false) }
+    fun background() { visible=false;syncGeneration++;synchronizing=false;mutable.update { it.copy(busy=false) };loadJob?.cancel();searchJob?.cancel();foregroundJob?.cancel() }
     fun date(date:LocalDate) {
         val today=LocalDate.now(ZoneId.of(mutable.value.policy.archiveZone))
         val target=minOf(date,today)
@@ -96,11 +139,11 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     fun message(value:String?) { mutable.update { it.copy(message=value) } }
     private fun action(block:suspend(Graph)->Unit) { viewModelScope.launch(Dispatchers.IO) {
         mutable.update { it.copy(busy=true) }
-        try { recoverableTask { block(app.graph());reload(false) }.onFailure { if(it is LinkageError||app.currentGraph==null)failure("记录操作",it) else message(it.message ?: "操作未完成，请重试") } } finally { mutable.update { it.copy(busy=false) } }
+        try { recoverableTask { block(app.graph());reload() }.onFailure { if(it is LinkageError||app.currentGraph==null)failure("记录操作",it) else message(it.message ?: "操作未完成，请重试") } } finally { mutable.update { it.copy(busy=false) } }
     } }
     fun recording(action:String) { mutable.update { it.copy(demo=false) };action { g ->
         g.repo.command(action)
-        if(action=="pause"||action=="stop") { app.stopService(Intent(app,RecordingService::class.java));WorkScheduling.pause(app) }
+        if(action=="pause"||action=="stop") { app.stopService(Intent(app,RecordingService::class.java));WorkScheduling.pause(app);workScheduled=false }
         else { if(!WorkScheduling.schedule(app))message("系统后台调度暂不可用，打开应用时仍会同步");RecordingService.start(app);g.collector.probe();g.collector.pull(true) }
     } }
     fun beginRecording(sources:Set<Source>) {
@@ -114,13 +157,7 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
             g.collector.pull(true,true)
         }
     }
-    fun permissionsChanged()=action { g ->
-        g.collector.probe()
-        if(g.repo.cachedPolicy.requested&&!g.repo.cachedPolicy.paused) {
-            RecordingService.start(app)
-            g.collector.pull(true,true)
-        }
-    }
+    fun permissionsChanged() { synchronize(true) }
     fun completeDirectSetup() {
         if(!mutable.value.policy.requested && mutable.value.policy.startedMs==null) beginRecording(mutable.value.policy.enabledSources)
         else permissionsChanged()
@@ -137,9 +174,11 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         RecordingService.start(app)
         g.collector.probe()
     }
-    fun section(needsHistory:Boolean,connections:Boolean=false) {
-        val changed=historyVisible!=needsHistory;historyVisible=needsHistory
-        if(changed&&needsHistory)refresh(false)
+    fun section(needsHistory:Boolean,connections:Boolean=false,needsPositions:Boolean=false,needsDiagnostics:Boolean=false) {
+        val changed=(needsHistory&&!historyVisible)||(needsPositions&&!positionsVisible)||(needsDiagnostics&&!diagnosticsVisible)
+        historyVisible=needsHistory;positionsVisible=needsPositions;diagnosticsVisible=needsDiagnostics
+        if(!needsPositions)mutable.update { it.copy(positions=emptyList()) }
+        if(changed)refresh(false)
         if(connections) {
             if(mutable.value.demo)demo(false)
             loadApps()
@@ -185,7 +224,7 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     fun cancelRestore() { mutable.value.inspection?.directory?.deleteRecursively();mutable.update { it.copy(inspection=null) } }
     fun restore()=action { g ->
         val i=mutable.value.inspection ?: return@action
-        g.repo.command("stop");app.stopService(Intent(app,RecordingService::class.java));WorkScheduling.pause(app)
+        g.repo.command("stop");app.stopService(Intent(app,RecordingService::class.java));WorkScheduling.pause(app);workScheduled=false
         BackupService(app,g.repo).restore(i);g.repo.initialize();g.collector.probe()
         mutable.update { it.copy(inspection=null,selectedDate=LocalDate.now(ZoneId.of(g.repo.cachedPolicy.archiveZone)).toString()) }
         message("记录已恢复。请重新确认来源授权，再开始记录；照片需要重新关联")
