@@ -1,5 +1,6 @@
 package com.personal.wo.ui
 
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,19 +14,15 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.personal.wo.core.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.time.*
-import kotlin.math.*
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun DayDrumHome(s:WoUiState,onChapter:(DayChapter)->Unit,statistics:()->Unit,
@@ -39,7 +36,7 @@ import kotlin.math.*
     var menu by remember { mutableStateOf(false) }
     val pager=key(day.dayDate,s.demo){rememberPagerState(initialPage=1,pageCount={chapters.size+2})}
     val dark=MaterialTheme.colorScheme.background.luminance()<.15f
-    TimelineAtmosphere(day,chapters,pager.currentPage+pager.currentPageOffsetFraction,dark) {
+    TimelineAtmosphere(day,chapters,{pager.currentPage+pager.currentPageOffsetFraction},dark) {
     Column(Modifier.fillMaxSize().testTag("day-drum-home")) {
         Row(Modifier.fillMaxWidth().padding(start=20.dp,end=8.dp,top=4.dp),verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(onClickLabel="选择日期"){calendar=true}.padding(4.dp),verticalArrangement=Arrangement.spacedBy(2.dp)) {
@@ -109,16 +106,6 @@ import kotlin.math.*
     }
 }
 
-/** Signed horizontal displacement; all other depth properties are mirror-symmetric. */
-internal data class DrumPose(val x:Float,val y:Float,val rotation:Float,val scale:Float,val alpha:Float,val depth:Float)
-internal fun drumPose(offset:Float):DrumPose {
-    val angle=offset.coerceIn(-1.5f,1.5f)*58f
-    val radians=angle*PI.toFloat()/180f
-    val depth=cos(radians).coerceAtLeast(0f)
-    return DrumPose(sin(radians)*.80f,(1f-depth)*18f,angle,.80f+.20f*depth,
-        if(abs(offset)>1.5f)0f else .32f+.68f*depth,depth)
-}
-
 @Composable internal fun DayDrum(day:DayView,chapters:List<DayChapter>,pager:PagerState,
     onChapter:(DayChapter)->Unit,onDate:(LocalDate)->Unit,today:LocalDate,modifier:Modifier=Modifier,onAll:()->Unit={}) {
     val scope=rememberCoroutineScope()
@@ -127,17 +114,19 @@ internal fun drumPose(offset:Float):DrumPose {
     val selected=pager.currentPage.coerceIn(0,chapters.size+1)
     val active=chapters.getOrNull(selected-1)
     val date=LocalDate.parse(day.dayDate)
-    fun move(index:Int,animate:Boolean=true) {
+    val chapterTimes=remember(chapters){chapters.map{it.part.startMs}.toLongArray()}
+    val times=remember(day,chapters){drumTimes(day,chapters)}
+    fun move(index:Int) {
         navigation?.cancel()
         navigation=scope.launch {
-            val target=index.coerceIn(0,chapters.size+1)
-            if(animate)pager.animateScrollToPage(target) else pager.scrollToPage(target)
+            pager.animateScrollToPage(index.coerceIn(0,chapters.size+1),
+                animationSpec=spring(dampingRatio=1f,stiffness=240f,visibilityThreshold=.1f))
         }
     }
     fun activate(index:Int) {
-        // Read the live pager state; a cached lazy-item callback may outlive the
-        // composition that selected it. Native dragging already cancels taps.
         if(index!=pager.currentPage){move(index);return}
+        // A partly rotated card is brought to rest before opening its details.
+        if(pager.isScrollInProgress||kotlin.math.abs(pager.currentPageOffsetFraction)>.02f){move(index);return}
         navigation?.cancel()
         when(index){0->onDate(date.minusDays(1));chapters.size+1->if(date<today)onDate(date.plusDays(1));else->chapters.getOrNull(index-1)?.let(onChapter)}
     }
@@ -158,12 +147,20 @@ internal fun drumPose(offset:Float):DrumPose {
                 }
                 if(!wide)Text("左右转动 · 轻触展开这一段",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 val length=(day.windowEndMs-day.windowStartMs).coerceAtLeast(1)
-                val fraction=active?.let{((it.part.startMs-day.windowStartMs).toFloat()/length).coerceIn(0f,1f)} ?: if(selected==0)0f else 1f
+                val fraction=((timelineTime(times,pager.currentPage+pager.currentPageOffsetFraction)-day.windowStartMs).toFloat()/length).coerceIn(0f,1f)
                 Slider(value=scrubbing ?: fraction,onValueChange={ value ->
                     scrubbing=value
-                    val next=nearestChapter(chapters,day.windowStartMs+(length*value).toLong())+1
-                    if(next!=pager.currentPage)move(next,false)
-                },onValueChangeFinished={scrubbing=null},enabled=chapters.size>1,
+                    // Keep the position fractional while the thumb is held. Repeated
+                    // nearest-page jumps were a second source of light/motion flashes.
+                    val position=timelinePosition(chapterTimes,day.windowStartMs+(length*value).toLong())+1f
+                    val page=position.roundToInt()
+                    navigation?.cancel()
+                    navigation=scope.launch{pager.scrollToPage(page,position-page)}
+                },onValueChangeFinished={
+                    val value=scrubbing
+                    scrubbing=null
+                    if(value!=null)move(nearestChapter(chapters,day.windowStartMs+(length*value).toLong())+1)
+                },enabled=chapters.size>1,
                     modifier=Modifier.fillMaxWidth().height(40.dp).testTag("day-time-scrubber").semantics {
                         contentDescription="一天的时间轴"
                         stateDescription=active?.part?.let{partRange(it,day.zoneId)} ?: "日期边界"
@@ -188,134 +185,7 @@ internal fun drumPose(offset:Float):DrumPose {
     }
 }
 
-@Composable private fun CylinderPages(day:DayView,chapters:List<DayChapter>,pager:PagerState,
-    activate:(Int)->Unit,hasNextDate:Boolean,compact:Boolean,modifier:Modifier) {
-    val latest by rememberUpdatedState(chapters)
-    val activateLatest by rememberUpdatedState(activate)
-    val displayDensity=LocalDensity.current
-    val largeType=LocalDensity.current.fontScale>=1.3f
-    BoxWithConstraints(modifier.testTag("drum-scene").clipToBounds(),contentAlignment=Alignment.Center) {
-        val width=(maxWidth*.74f).coerceAtMost(380.dp)
-        val widthPx=with(displayDensity){width.toPx()}
-        val padding=(maxWidth-width)/2
-        val height=(maxHeight-28.dp).coerceAtMost(if(compact||largeType)540.dp else width*1.40f).coerceAtLeast(48.dp)
-        // Visuals are siblings on a shared canvas, never transformed outside a lazy
-        // page's clipping rectangle. Both sides use exactly the same depth function.
-        val visible=(pager.currentPage-2..pager.currentPage+2).filter{it in 0..chapters.size+1}
-        visible.forEach { index ->
-            val offset=(index-pager.currentPage)-pager.currentPageOffsetFraction
-            val pose=drumPose(offset)
-            if(pose.alpha>0f)key(chapters.getOrNull(index-1)?.id ?: "edge-$index") {
-                val visual=Modifier.offset { IntOffset((pose.x*widthPx).roundToInt(),with(displayDensity){pose.y.dp.roundToPx()}) }
-                    .width(width).height(height).zIndex(pose.depth).graphicsLayer {
-                    rotationY=pose.rotation;cameraDistance=14f*density
-                    scaleX=pose.scale;scaleY=pose.scale;alpha=pose.alpha
-                }.clearAndSetSemantics { }
-                val chapter=chapters.getOrNull(index-1)
-                EventCardTheme {
-                    if(chapter!=null)ChapterFace(chapter,day.zoneId,visual,compact,largeType)
-                    else DateFace(day,index==0,hasNextDate,visual,compact)
-                }
-            }
-        }
-        // Transparent native pager owns dragging, snapping, keys and accessibility.
-        // Its hit areas align with the centered card and the two exposed edges.
-        HorizontalPager(state=pager,pageSize=PageSize.Fixed(width),contentPadding=PaddingValues(horizontal=padding,vertical=14.dp),
-            beyondViewportPageCount=1,flingBehavior=PagerDefaults.flingBehavior(pager,pagerSnapDistance=PagerSnapDistance.atMost(4)),
-            key={ index -> latest.getOrNull(index-1)?.id ?: when(index){0->"previous-day";latest.size+1->"end-day";else->"pending-$index"} },
-            modifier=Modifier.fillMaxSize().zIndex(2f).testTag("experience-drum")) { index ->
-            val chapter=latest.getOrNull(index-1)
-            val center=index==pager.currentPage
-            Box(Modifier.fillMaxWidth().height(height).then(if(center)Modifier.testTag("chapter-open").semantics {
-                contentDescription=chapter?.let { "${it.part.label}，${partRange(it.part,day.zoneId)}。${it.summary}"+
-                    it.apps.joinToString("，"){a->"${a.episode.title}${durationText(a.durationMs)}"}+
-                    if(it.photos.isNotEmpty())"，${it.photos.size}项影像" else "" } ?: if(index==0)"回看前一天" else if(hasNextDate)"继续到后一天" else "今天，先到这里"
-            } else Modifier.clearAndSetSemantics { }).clickable(enabled=chapter!=null||index==0||hasNextDate||!center,
-                onClickLabel=if(chapter!=null)"查看这个大事件的全部片段" else "查看日期"){activateLatest(index)})
-        }
-    }
-}
-
 internal fun partRange(part:RecapPart,zone:String)=if(part.startMs==part.endMs)clock(part.startMs,zone) else "${clock(part.startMs,zone)}–${if(clock(part.endMs,zone)=="00:00")"24:00" else clock(part.endMs,zone)}"
-private fun eventIcon(kind:String)=when(kind){
-    "STAY"->Icons.Outlined.LocationOn;"MOVE"->Icons.Outlined.DirectionsWalk
-    "EXERCISE"->Icons.Outlined.FitnessCenter;"SLEEP"->Icons.Outlined.Bedtime
-    "PHOTO"->Icons.Outlined.PhotoLibrary;"MEDIA"->Icons.Outlined.Headphones;else->Icons.Outlined.Smartphone
-}
-
-@Composable private fun ChapterFace(chapter:DayChapter,zone:String,modifier:Modifier,compact:Boolean,largeType:Boolean) {
-    val part=chapter.part;val tint=MaterialTheme.colorScheme.primary
-    val title=part.label.removeSuffix("（推测）")
-    val timeLabel=(if(part.label.endsWith("（推测）"))"推测 · " else "")+partRange(part,zone)
-    Surface(modifier,shape=RoundedCornerShape(28.dp),color=MaterialTheme.colorScheme.surface,
-        border=BorderStroke(1.dp,tint.copy(alpha=.18f)),shadowElevation=4.dp) {
-        BoxWithConstraints {
-            if(compact||(largeType&&maxHeight<440.dp))Row(Modifier.fillMaxSize().padding(16.dp),horizontalArrangement=Arrangement.spacedBy(14.dp),verticalAlignment=Alignment.CenterVertically) {
-                if(chapter.photos.isNotEmpty())PhotoThumbnail(chapter.photos.first().uri,Modifier.size(76.dp),crop=true)
-                else IconTile(eventIcon(chapter.kind),tint,48)
-                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-                    Text(title,style=MaterialTheme.typography.titleLarge,color=tint,maxLines=2,overflow=TextOverflow.Ellipsis)
-                    Text(timeLabel,style=MaterialTheme.typography.labelMedium)
-                    Text(chapter.summary,maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodyMedium)
-                    Text("${part.episodes.size}个片段 · 轻触展开",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            } else Column(Modifier.fillMaxSize().padding(if(largeType)16.dp else 20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp),verticalAlignment=Alignment.CenterVertically) {
-                    IconTile(eventIcon(chapter.kind),tint,40)
-                    Column(Modifier.weight(1f)) {
-                        Text(title,style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Medium,color=tint,maxLines=2,overflow=TextOverflow.Ellipsis)
-                        Text(timeLabel,style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Text(chapter.summary,style=MaterialTheme.typography.bodyLarge,maxLines=2,overflow=TextOverflow.Ellipsis)
-                if(chapter.photos.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        chapter.photos.take(2).forEach { photo ->
-                            Column(Modifier.weight(1f).fillMaxHeight(),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-                                PhotoThumbnail(photo.uri,Modifier.fillMaxWidth().weight(1f),crop=true)
-                                Text(clock(photo.episode.startMs,zone),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-                if(chapter.apps.isNotEmpty()) {
-                    val shown=chapter.apps.take(if(largeType||chapter.photos.isNotEmpty())1 else 3)
-                    shown.forEach { app ->
-                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
-                            AppBadge(app.episode.packageName,app.episode.title,Modifier.size(28.dp))
-                            Text(app.episode.title,Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelLarge)
-                            Text(durationText(app.durationMs),style=MaterialTheme.typography.labelMedium,color=tint)
-                        }
-                    }
-                    if(chapter.apps.size>shown.size)Text("另有${chapter.apps.size-shown.size}个应用的较长使用",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if(chapter.photos.isEmpty())Column(Modifier.weight(1f).fillMaxWidth(),verticalArrangement=Arrangement.Center) {
-                    Text(durationText(chapter.durationMs),style=MaterialTheme.typography.headlineLarge.copy(fontSize=40.sp,lineHeight=50.sp),maxLines=1,overflow=TextOverflow.Ellipsis)
-                    Text("记录时长",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                    Text("${part.episodes.size}个片段${if(chapter.photos.size>2)" · ${chapter.photos.size}项影像" else ""}",Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("展开",style=MaterialTheme.typography.labelLarge,color=tint)
-                    Icon(Icons.Outlined.ChevronRight,null,Modifier.size(18.dp),tint=tint)
-                }
-            }
-        }
-    }
-}
-
-@Composable private fun DateFace(day:DayView,previous:Boolean,hasNext:Boolean,modifier:Modifier,compact:Boolean) {
-    val date=LocalDate.parse(day.dayDate).plusDays(if(previous)-1 else 1)
-    val end=!previous&&!hasNext
-    Surface(modifier,shape=RoundedCornerShape(28.dp),color=MaterialTheme.colorScheme.surfaceContainer,border=BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant)) {
-        Column(Modifier.fillMaxSize().padding(if(compact)16.dp else 24.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) {
-            Icon(if(end)Icons.Outlined.CheckCircle else Icons.Outlined.DateRange,null,Modifier.size(if(compact)28.dp else 40.dp),tint=MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(12.dp))
-            Text(if(end)"今天，先到这里" else "${date.monthValue}月${date.dayOfMonth}日",style=MaterialTheme.typography.titleLarge)
-            Text(if(end)"截至 ${clock(day.asOfMs,day.zoneId)}" else if(previous)"回看前一天" else "继续到后一天",Modifier.padding(top=8.dp),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            if(!compact)Text(if(end)"新的经历，会继续在这里浮现。" else "轻触翻开这一天",Modifier.padding(top=20.dp),style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
 
 @Composable fun ChapterDetailsPage(day:DayView,chapter:DayChapter?,minimum:Int,onEpisode:(Episode)->Unit) {
     if(chapter==null){Empty("这个大事件已更新","返回时间轴查看最新片段。");return}
