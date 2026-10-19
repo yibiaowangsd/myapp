@@ -71,6 +71,61 @@ class DayCacheTest {
         repo.delete(repo.preview(start,start+86_400_000))
         assertNull(repo.cachedDay(date));assertTrue(repo.currentDay(date).episodes.isEmpty())
     }
+    @Test fun unrelatedDatesAndDisplayOnlySourceChangesKeepTheCachedDay()=runBlocking {
+        val first=repo.currentDay(date)
+        val later=window(date.plusDays(8),ZoneId.of(policy.archiveZone)).start
+        repo.ingest(listOf(Observation("later",Source.PHOTO,"later",Kind.PHOTO,later+1,
+            payload=Payload(uri="content://test/later",captured=true))),policy.generation)
+        repo.state(SourceState(Source.HEALTH,authorization="UNKNOWN",runtime="STOPPED"))
+        queries.clear()
+        assertSame(first,repo.currentDay(date))
+        assertTrue(queries.none{it.contains("FROM observation",true)})
+    }
+    @Test fun identicalEvidenceWithANewArrivalTimestampDoesNotRebuildOrRewriteIt()=runBlocking {
+        val first=repo.currentDay(date)
+        val start=window(date,ZoneId.of(policy.archiveZone)).start
+        repo.ingest(listOf(Observation("photo",Source.PHOTO,"photo",Kind.PHOTO,start+3_600_000,
+            receivedMs=start+10_000_000,payload=Payload(uri="content://test/1",captured=true))),policy.generation)
+        queries.clear()
+        assertSame(first,repo.currentDay(date))
+        assertTrue(queries.none{it.contains("FROM observation",true)})
+    }
+    @Test fun restartReusesACurrentSnapshotWithoutDecodingRawHistory()=runBlocking {
+        val first=repo.currentDay(date)
+        repo.initialize();queries.clear()
+        assertEquals(first,repo.currentDay(date))
+        assertTrue(queries.none{it.contains("FROM observation",true)})
+    }
+    @Test fun outdatedPermissionProbesCannotRestoreAnOldRecordingState()=runBlocking {
+        repo.configure{it.copy(paused=true)}
+        val before=repo.sources()
+        repo.probed(listOf(SourceState(Source.USAGE,authorization="GRANTED",runtime="RUNNING")),policy.generation)
+        assertEquals(before,repo.sources())
+    }
+    @Test fun timeOnlyRefreshAvoidsRawReadsButRollbackRebuildsEvenAfterRestart()=runBlocking {
+        val context=RuntimeEnvironment.getApplication()
+        var now=window(date,ZoneId.of(policy.archiveZone)).start+12*3_600_000L
+        val timed=WoRepository(db,KeyVault(context),EngineConfig(),context){now}
+        timed.initialize();val first=timed.currentDay(date)
+        now+=120_000;queries.clear()
+        assertEquals(now,timed.currentDay(date).asOfMs)
+        assertTrue(queries.none{it.contains("FROM observation",true)})
+        timed.initialize();now=first.asOfMs-60_000;queries.clear()
+        assertEquals(now,timed.currentDay(date).asOfMs)
+        assertTrue(queries.any{it.contains("FROM observation",true)})
+    }
+    @Test fun thumbnailInvalidationIsScopedByUriAndSize() {
+        val a=Bitmap.createBitmap(32,32,Bitmap.Config.ARGB_8888)
+        val b=Bitmap.createBitmap(64,64,Bitmap.Config.ARGB_8888)
+        val first=ThumbnailCache.key("content://test/a",128,128)
+        val other=ThumbnailCache.key("content://test/b",512,256)
+        ThumbnailCache.cache.put(first,a);ThumbnailCache.cache.put(other,b)
+        ThumbnailCache.invalidate(listOf("content://test/a"))
+        assertNull(ThumbnailCache.cache.get(first))
+        assertSame(b,ThumbnailCache.cache.get(other))
+        assertNotEquals(first,ThumbnailCache.key("content://test/a",128,128))
+        assertNotEquals(other,ThumbnailCache.key("content://test/b",256,256))
+    }
     @Test fun liveCacheExpiresAndBoundsMemoryAcrossDatesAndPolicies() {
         val cache=RecentDayCache(2);val day=demoDay(date,"Asia/Shanghai")
         cache.put("one",day,1,1,100)

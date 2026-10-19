@@ -5,12 +5,21 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import com.personal.wo.core.*
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.time.ZoneId
+
+@Serializable private data class CachedAchievementDay(
+    val version:Int=1,val revision:Long,val asOfMs:Long,val projectionKey:String,val day:AchievementDayContribution
+)
+private data class AchievementHeader(val date:String,val revision:Long,val asOfMs:Long)
+private data class AchievementInput(val settings:AchievementSettings,val policy:Policy,val headers:List<AchievementHeader>)
 
 /** Achievement settings live inside the existing SQLCipher database, not plaintext preferences. */
 class AchievementStore private constructor(
@@ -30,44 +39,70 @@ class AchievementStore private constructor(
     } ?: AchievementSettings()
     suspend fun settings():AchievementSettings=mutex.withLock{settingsUnlocked()}
 
-    suspend fun load():AchievementSnapshot=mutex.withLock {
-        db.withTransaction {
-            val settings=settingsUnlocked()
-            val policy=policyProvider()
+    private fun headers(zone:String,from:String,to:String):List<AchievementHeader> = db.query(SimpleSQLiteQuery(
+        "SELECT date,revision,asOfMs FROM daily_summary WHERE zone=? AND date>=? AND date<=? ORDER BY date ASC",
+        arrayOf(zone,from,to)
+    )).use { c->buildList { while(c.moveToNext())add(AchievementHeader(c.getString(0),c.getLong(1),c.getLong(2))) } }
+    private fun policyKey(policy:Policy)=WoJson.encodeToString(policy.copy(lastAliveMs=0))
+    suspend fun load():AchievementSnapshot {
+        // Read small headers under the repository lock. Decode and aggregate history
+        // outside both that lock and the write transaction, then validate the snapshot.
+        repeat(3) {
+            currentCoroutineContext().ensureActive()
             val asOf=now()
+            val policy=mutex.withLock { policyProvider() }
             val today=Instant.ofEpochMilli(asOf).atZone(ZoneId.of(policy.archiveZone)).toLocalDate()
             val from=today.minusDays((retentionDays.coerceIn(1,36500)-1).toLong())
-            val accumulator=AchievementAccumulator(settings,policy)
-            var after=from.minusDays(1).toString()
-            // Keyset paging in the active archive zone. Do not reuse the 90-day history UI,
-            // offset across duplicate zones, or keep years of full DayViews in memory.
-            while(true) {
+            val input=mutex.withLock { AchievementInput(settingsUnlocked(),policyProvider(),headers(policy.archiveZone,from.toString(),today.toString())) }
+            if(input.policy.archiveZone!=policy.archiveZone)return@repeat
+            val prefix="achievement.day.v1:${policy.archiveZone}:"
+            val cached=db.query(SimpleSQLiteQuery("SELECT `key`,value FROM app_meta WHERE `key`>=? AND `key`<=?",
+                arrayOf(prefix+from,prefix+today))).use { c->buildMap { while(c.moveToNext())put(c.getString(0),c.getString(1)) } }
+            val projectionKey=stableId(policyKey(input.policy),input.settings.readingPackages.sorted())
+            val accumulator=AchievementAccumulator(input.settings,input.policy)
+            val updates=mutableListOf<MetaRow>()
+            var consistent=true
+            input.headers.forEach { header ->
                 currentCoroutineContext().ensureActive()
-                val page=db.query(SimpleSQLiteQuery(
-                    "SELECT date,json FROM daily_summary WHERE zone=? AND date>? AND date<=? ORDER BY date ASC LIMIT 24",
-                    arrayOf(policy.archiveZone,after,today.toString())
-                )).use { c -> buildList { while(c.moveToNext())add(c.getString(0) to c.getString(1)) } }
-                if(page.isEmpty())break
-                page.forEach { (date,json) ->
-                    currentCoroutineContext().ensureActive()
-                    val day=WoJson.decodeFromString<DayView>(json)
-                    require(day.dayDate==date&&day.zoneId==policy.archiveZone){"归档索引与内容不一致"}
-                    accumulator.accept(day.copy(asOfMs=minOf(day.asOfMs,asOf)))
+                if(!consistent)return@forEach
+                val key=prefix+header.date
+                val saved=cached[key]?.let { json->runCatching { WoJson.decodeFromString<CachedAchievementDay>(json) }.getOrNull() }
+                val contribution=if(saved!=null&&saved.version==1&&saved.revision==header.revision&&saved.asOfMs==minOf(header.asOfMs,asOf)&&
+                    saved.projectionKey==projectionKey&&saved.day.date==header.date&&saved.day.zone==policy.archiveZone) saved.day else {
+                    val row=db.dao().summary(header.date,policy.archiveZone)
+                    if(row==null||row.revision!=header.revision||row.asOfMs!=header.asOfMs) { consistent=false;return@forEach }
+                    val projected=withContext(Dispatchers.Default) {
+                        val day=WoJson.decodeFromString<DayView>(row.json)
+                        require(day.dayDate==header.date&&day.zoneId==policy.archiveZone){"归档索引与内容不一致"}
+                        accumulator.contribution(day.copy(asOfMs=minOf(day.asOfMs,asOf)))
+                    }
+                    updates+=MetaRow(key,WoJson.encodeToString(CachedAchievementDay(revision=row.revision,asOfMs=minOf(row.asOfMs,asOf),projectionKey=projectionKey,day=projected)))
+                    projected
                 }
-                after=page.last().first
+                withContext(Dispatchers.Default){accumulator.accept(contribution)}
             }
-            val memory=db.dao().meta(MEMORY_KEY)?.let {
-                require(it.value.length<=16_384){"成就状态超过大小限制"}
-                WoJson.decodeFromString<AchievementMemory>(it.value).also{m->require(m.version==1)}
-            } ?: AchievementMemory()
-            val snapshot=accumulator.snapshot(memory,from.toString(),today.toString())
-            // Deletions/changed evidence may relock a medal. Remove stale display slots
-            // in the same transaction so invisible pins cannot block future choices.
-            val unlocked=snapshot.unlocked.map{it.goal.id}.toSet()
-            val cleaned=settings.copy(showcaseIds=settings.showcaseIds.filter{it in unlocked})
-            if(cleaned!=settings)db.dao().putMeta(MetaRow(SETTINGS_KEY,WoJson.encodeToString(cleaned)))
-            snapshot.copy(settings=cleaned)
+            if(!consistent)return@repeat
+            val result=mutex.withLock {
+                db.withTransaction {
+                    if(policyKey(policyProvider())!=policyKey(input.policy)||settingsUnlocked()!=input.settings||
+                        headers(policy.archiveZone,from.toString(),today.toString())!=input.headers)return@withTransaction null
+                    updates.forEach { db.dao().putMeta(it) }
+                    val retained=input.headers.map { prefix+it.date }.toSet()
+                    (cached.keys-retained).forEach { db.dao().deleteMetaRange(it,it) }
+                    val memory=db.dao().meta(MEMORY_KEY)?.let {
+                        require(it.value.length<=16_384){"成就状态超过大小限制"}
+                        WoJson.decodeFromString<AchievementMemory>(it.value).also{m->require(m.version==1)}
+                    } ?: AchievementMemory()
+                    val snapshot=accumulator.snapshot(memory,from.toString(),today.toString())
+                    val unlocked=snapshot.unlocked.map{it.goal.id}.toSet()
+                    val cleaned=input.settings.copy(showcaseIds=input.settings.showcaseIds.filter{it in unlocked})
+                    if(cleaned!=input.settings)db.dao().putMeta(MetaRow(SETTINGS_KEY,WoJson.encodeToString(cleaned)))
+                    snapshot.copy(settings=cleaned)
+                }
+            }
+            if(result!=null)return result
         }
+        error("归档正在更新，请稍后刷新成就")
     }
     private suspend fun update(transform:(AchievementSettings)->AchievementSettings)=mutex.withLock {
         db.withTransaction {

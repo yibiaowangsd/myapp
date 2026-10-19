@@ -161,10 +161,13 @@ private fun axisAt(x: Float, width: Float, y: Float, arc: Float): Float {
                         ))
                     }
                     .clearAndSetSemantics { testTag = "wheel-face-$index" }
+                val distance=abs(index-pager.currentPage)
+                CompositionLocalProvider(LocalThumbnailPriority provides distance,LocalThumbnailEnabled provides (distance<=1)) {
                 EventCardTheme {
                     val chapter = chapters.getOrNull(index - 1)
                     if (chapter != null) WheelChapterFace(chapter, day.zoneId, visual, height.value, largeType)
                     else WheelDateFace(day, index == 0, hasNextDate, visual, height.value)
+                }
                 }
             }
         }

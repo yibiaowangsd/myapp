@@ -1,3 +1,26 @@
+# 1.7.2 性能优化验证（2026-10-19）
+
+应用版本1.7.2 / 13，增强版Release使用原个人证书签名。六项实现与复测命令见[性能说明](Performance_1.7.2.md)，结构化结果见[Verification.json](Verification.json)。
+
+| 项目 | 本轮结果 |
+| --- | --- |
+| 核心与增强版测试 | 232个不同用例，跨变体355次执行，失败0、错误0、跳过0；核心104、增强版128、离线版123 |
+| 增强版Release | R8、资源压缩、Baseline Profile编译、Startup Profile合并与APK打包通过 |
+| 双Debug与Release Lint | 每个变体均为0错误、37警告 |
+| 数据库兼容 | Room V1仍为17个实体；结构、唯一性、FTS4和完整性检查通过 |
+| 安装包静态检查 | 原签名匹配、版本1.7.2 / 13、非调试、arm64-v8a、minSdk29 / targetSdk36；ZIP与ELF 16KB对齐通过 |
+| 启动配置 | Android 34模拟器两条路径采集通过，采集Baseline应用规则2955条、Startup规则2142条；合并种子后源码分别2971/2142条，由R8处理进入APK |
+| 性能测量模块 | 编译通过；提供冷/温启动、完整首屏、时间轴转动、切日和切换页签路径 |
+| 目标手机 | 未执行真机覆盖安装、耗时/帧率和耗电测量，不据此声称具体提速幅度 |
+
+本轮查询回归确认：未修改日期及当天仅推进时钟均不重新读取原始观察；重新初始化后仍复用有效快照；手机时钟回拨会重建。成就缓存命中不读取完整日归档，单日内容变化仅重新读取该日。重复观察、范围失效、删除/撤权、策略代次、跨日去重及动态首页背景继续按原规则验证。异步聚合画面测试在时间轴就绪后取样。
+
+签名证书SHA-256：`c9b24de261dc30ebbc92da22f3f7826beb2c3015141c7b43d63b1ca27de9cb58`。APK摘要及大小记录在结构化结果中；安装包单独交付，不提交到源码仓库。
+
+[采集原始结果](https://github.com/yibiaowangsd/myapp/actions/runs/39235347350) · [代码与持续检查](https://github.com/yibiaowangsd/myapp/pull/4) · [路径采集工作流](https://github.com/yibiaowangsd/myapp/actions/workflows/performance-profiles.yml)
+
+以下保留历史验证记录。
+
 # 1.7.1 华为接入准备验证（2026-10-19）
 
 本轮216个不同用例、跨变体327次执行全部通过，双变体Lint零错误，双Debug与增强Release/R8构建通过。平台审核、真实账号授权和个人签名覆盖安装未执行。完整范围与原始证据见[本轮验证](Huawei_Health_Verification_20261019.md)。
@@ -8,7 +31,7 @@
 
 整理时间：2026-10-16T09:39:55.581204+08:00。应用版本1.6.0 / 10，包名`com.personal.wo`，数据库Room V1。
 
-本次仅构建并交付增强版Release，沿用原个人签名配置。Gradle构建成功；仓库同步整理已有代码、文档和结果，没有重新构建或测试。结构化记录见[Verification.json](Verification.json)。
+本次仅构建并交付增强版Release，沿用原个人签名配置。Gradle构建成功；仓库同步整理已有代码、文档和结果，没有重新构建或测试。结构化记录见[历史 Verification.json](archive/v1.6.0/Verification.json)。
 
 ## 已完成的增强版构建
 

@@ -72,8 +72,10 @@ class DayDrumUiTest {
         }
     }
     @Composable private fun Shell(s:WoUiState=state(),dark:Boolean=false,open:(DayChapter)->Unit={},stats:()->Unit={},onDate:(LocalDate)->Unit={},threshold:(Int)->Unit={}) {
+        // Production publishes this projection with the DayView after background work.
+        val prepared=remember(s.day,s.homeAppMinMinutes){s.copy(homeProjection=s.day?.let{HomeProjection(it,s.homeAppMinMinutes,dayChapters(it,s.homeAppMinMinutes))})}
         WoTheme(dark=dark) { Scaffold(bottomBar={AppNavigation(0){}}) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) { DayDrumHome(s,open,stats,{},{},{},onDate,threshold,today=date) }
+            Box(Modifier.fillMaxSize().padding(padding)) { DayDrumHome(prepared,open,stats,{},{},{},onDate,threshold,today=date) }
         } }
     }
     @Test fun homeGroupsPeriodsAndOpensStatisticsExplicitly() {
@@ -270,6 +272,11 @@ class DayDrumUiTest {
                 view.draw(Canvas(b));color=b.getPixel(4,300);b.recycle()
             };return color
         }
+        // The fallback projection runs on Default; sample the ready timeline, as a user sees it.
+        compose.waitUntil(timeoutMillis=5_000) {
+            compose.onAllNodesWithTag("drum-selected-time").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("drum-selected-time").assertTextEquals("09:00–11:00")
         val daytime=sample();capture("35-event-daylight")
         compose.onNodeWithTag("day-time-scrubber").performSemanticsAction(SemanticsActions.SetProgress){it(.99f)}
         compose.onNodeWithTag("drum-selected-time").assertTextEquals("20:00–21:00")

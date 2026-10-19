@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.*
 import com.personal.wo.core.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.*
 import kotlin.math.roundToInt
 
@@ -30,7 +32,12 @@ import kotlin.math.roundToInt
     onThreshold:(Int)->Unit={},today:LocalDate=LocalDate.now(ZoneId.of(s.policy.archiveZone)),onAll:()->Unit={}) {
     val day=s.day ?: return
     val date=LocalDate.parse(s.selectedDate)
-    val chapters=remember(day,s.homeAppMinMinutes){dayChapters(day,s.homeAppMinMinutes)}
+    val projection=resolvedHomeProjection(s,day)
+    if(projection==null) {
+        Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
+        return
+    }
+    val chapters=projection.chapters
     var calendar by rememberSaveable { mutableStateOf(false) }
     var filter by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
@@ -104,6 +111,16 @@ import kotlin.math.roundToInt
             DatePicker(state=picker,title={Text("选择回看的日期",Modifier.padding(24.dp))})
         }
     }
+}
+
+@Composable internal fun resolvedHomeProjection(s:WoUiState,day:DayView):HomeProjection? {
+    s.homeProjection?.takeIf { it.matches(day,s.homeAppMinMinutes) }?.let { return it }
+    // Standalone previews and a threshold changed during a reload use the same
+    // background projection contract; no fallback aggregation on the UI thread.
+    val projection by produceState<HomeProjection?>(null,day,s.homeAppMinMinutes) {
+        value=withContext(Dispatchers.Default){HomeProjection(day,s.homeAppMinMinutes,dayChapters(day,s.homeAppMinMinutes))}
+    }
+    return projection
 }
 
 @Composable internal fun DayDrum(day:DayView,chapters:List<DayChapter>,pager:PagerState,

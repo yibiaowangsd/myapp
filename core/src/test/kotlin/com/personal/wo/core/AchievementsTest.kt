@@ -4,6 +4,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.serialization.encodeToString
 
 class AchievementsTest {
     private val date=LocalDate.of(2026,10,1)
@@ -21,6 +22,22 @@ class AchievementsTest {
     }
     private fun evaluate(vararg days:DayView,settings:AchievementSettings=AchievementSettings(),p:Policy=policy)=achievementSnapshot(days.toList(),settings,p)
     private fun AchievementSnapshot.value(metric:AchievementMetric)=items.first{it.goal.metric==metric}.current
+    @Test fun cachedContributionsPreserveCrossDayDeduplicationAndFractionalMinutes() {
+        val first=day(episodes=listOf(e("reading",start=60,end=61).copy(endMs=day().windowStartMs+60*60_000L+40_000),
+            e("photo",kind="PHOTO",start=120,end=120,source=Source.PHOTO).copy(photoUris=listOf("content://same"),isFavorite=true)),steps=1000)
+        val second=day(1,episodes=listOf(e("reading-2",index=1,start=60,end=61).copy(endMs=day(1).windowStartMs+60*60_000L+40_000),
+            e("photo",index=1,kind="PHOTO",start=120,end=120,source=Source.PHOTO).copy(photoUris=listOf("content://same"),isFavorite=true)),steps=1000)
+        val accumulator=AchievementAccumulator(AchievementSettings(),policy)
+        listOf(first,second).forEach { d->
+            val saved=WoJson.encodeToString(accumulator.contribution(d))
+            accumulator.accept(WoJson.decodeFromString<AchievementDayContribution>(saved))
+        }
+        val result=accumulator.snapshot()
+        assertEquals(1L,result.value(AchievementMetric.READING))
+        assertEquals(1L,result.value(AchievementMetric.PHOTOS))
+        assertEquals(1L,result.value(AchievementMetric.FAVORITES))
+        assertEquals(2L,result.value(AchievementMetric.DAYS))
+    }
     @Test fun catalogHasThirtyTwoOriginalNamedMedalsWithFourTiers() {
         assertEquals(32,achievementCatalog.size)
         assertEquals(32,achievementCatalog.map{it.id}.toSet().size)

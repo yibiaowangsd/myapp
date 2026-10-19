@@ -18,4 +18,7 @@ internal class RecentDayCache(private val capacity:Int=3) {
         while(entries.size>capacity)entries.remove(entries.keys.first())
     }
     fun clear()=entries.clear()
+    fun invalidate(start:Long,end:Long) {
+        entries.entries.removeAll { (_,entry) -> entry.day.windowStartMs<end&&entry.day.windowEndMs>start }
+    }
 }

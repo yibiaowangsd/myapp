@@ -29,12 +29,15 @@ data class EvidenceRow(val episodeId: String, val evidenceKey: String, val snaps
     @Upsert suspend fun putPolicy(row: PolicyRow)
     @Query("SELECT * FROM app_meta WHERE `key`=:key") suspend fun meta(key: String): MetaRow?
     @Upsert suspend fun putMeta(row: MetaRow)
+    @Query("DELETE FROM app_meta WHERE `key`>=:from AND `key`<=:to") suspend fun deleteMetaRange(from:String,to:String)
     @Query("SELECT * FROM source_state") suspend fun sources(): List<SourceRow>
     @Upsert suspend fun putSource(row: SourceRow)
     @Query("SELECT * FROM observation WHERE startMs<:end AND endMs>=:start ORDER BY startMs LIMIT 10000") suspend fun observations(start: Long, end: Long): List<ObservationRow>
     @Query("SELECT * FROM observation WHERE sourceId='LOCATION' AND startMs<:end AND endMs>=:start ORDER BY startMs LIMIT 10000") suspend fun positions(start:Long,end:Long):List<ObservationRow>
     @Query("SELECT * FROM observation ORDER BY startMs LIMIT :limit OFFSET :offset") suspend fun allObservations(limit: Int, offset: Int): List<ObservationRow>
     @Upsert suspend fun putObservations(rows: List<ObservationRow>)
+    @Query("SELECT * FROM observation WHERE id IN (:ids)") suspend fun observationsByIds(ids:List<String>):List<ObservationRow>
+    @Query("SELECT * FROM observation WHERE sourceId=:source AND startMs<:end AND endMs>=:start") suspend fun sourceObservations(source:String,start:Long,end:Long):List<ObservationRow>
     @Query("SELECT * FROM observation WHERE sourceId='HEALTH'") suspend fun healthObservations():List<ObservationRow>
     @Query("SELECT * FROM episode WHERE kind IN ('STEPS','SLEEP','EXERCISE')") suspend fun healthEpisodes():List<EpisodeRow>
     @Query("DELETE FROM observation WHERE sourceId=:source AND startMs<:end AND endMs>=:start") suspend fun clearSourceRange(source: String, start: Long, end: Long)
@@ -68,6 +71,7 @@ data class EvidenceRow(val episodeId: String, val evidenceKey: String, val snaps
     @Query("DELETE FROM daily_summary WHERE date>=:from AND date<=:to") suspend fun deleteSummaries(from: String, to: String)
     @Query("DELETE FROM daily_metric WHERE date>=:from AND date<=:to") suspend fun deleteMetrics(from: String, to: String)
     @Upsert suspend fun putCoverage(row: CoverageRow)
+    @Query("SELECT * FROM source_coverage WHERE id=:id") suspend fun coverageById(id:String):CoverageRow?
     @Query("SELECT * FROM source_coverage WHERE startMs<:end AND endMs>:start") suspend fun coverage(start: Long, end: Long): List<CoverageRow>
     @Query("SELECT * FROM source_coverage") suspend fun allCoverage(): List<CoverageRow>
     @Upsert suspend fun putOperation(row: OperationRow)
