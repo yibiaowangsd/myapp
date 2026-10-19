@@ -102,6 +102,18 @@ class DayCacheTest {
         repo.probed(listOf(SourceState(Source.USAGE,authorization="GRANTED",runtime="RUNNING")),policy.generation)
         assertEquals(before,repo.sources())
     }
+    @Test fun timeOnlyRefreshAvoidsRawReadsButRollbackRebuildsEvenAfterRestart()=runBlocking {
+        val context=RuntimeEnvironment.getApplication()
+        var now=window(date,ZoneId.of(policy.archiveZone)).start+12*3_600_000L
+        val timed=WoRepository(db,KeyVault(context),EngineConfig(),context){now}
+        timed.initialize();val first=timed.currentDay(date)
+        now+=120_000;queries.clear()
+        assertEquals(now,timed.currentDay(date).asOfMs)
+        assertTrue(queries.none{it.contains("FROM observation",true)})
+        timed.initialize();now=first.asOfMs-60_000;queries.clear()
+        assertEquals(now,timed.currentDay(date).asOfMs)
+        assertTrue(queries.any{it.contains("FROM observation",true)})
+    }
     @Test fun thumbnailInvalidationIsScopedByUriAndSize() {
         val a=Bitmap.createBitmap(32,32,Bitmap.Config.ARGB_8888)
         val b=Bitmap.createBitmap(64,64,Bitmap.Config.ARGB_8888)

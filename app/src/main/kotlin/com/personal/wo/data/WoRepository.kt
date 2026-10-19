@@ -14,7 +14,8 @@ import java.util.UUID
 
 data class DeletionPreview(val generation: Long, val startMs: Long, val endMs: Long, val episodes: Int, val observations: Int, val id: String? = null)
 
-class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineConfig, private val context: Context) {
+class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineConfig, private val context: Context,
+    private val clock:()->Long=System::currentTimeMillis) {
     val changes = MutableStateFlow(0L)
     val mutex = Mutex()
     @Volatile var cachedPolicy = Policy(); private set
@@ -216,14 +217,15 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
     }
     /** Repeated UI refreshes reuse the same revision until data/policy or the live clock changes. */
     suspend fun currentDay(date:LocalDate):DayView=mutex.withLock {
-        val p=cachedPolicy;val now=System.currentTimeMillis();val zone=ZoneId.of(p.archiveZone)
+        val p=cachedPolicy;val now=clock();val zone=ZoneId.of(p.archiveZone)
         val key=dayKey(date,zone.id)
         val cached=recentDays.get(key,0,p.generation,now,false) ?: run {
             val row=dao.summary(date.toString(),zone.id)
             if(row!=null&&dao.meta(key)?.value==snapshotPolicy())WoJson.decodeFromString<DayView>(row.json) else null
         }
         if(cached!=null) {
-            val view=if(cached.asOfMs<cached.windowEndMs&&now-cached.asOfMs>=30_000)advanceDayClock(cached,p,now) else cached
+            val until=minOf(now,cached.windowEndMs).coerceAtLeast(cached.windowStartMs)
+            val view=if(until<cached.asOfMs||(cached.asOfMs<cached.windowEndMs&&now-cached.asOfMs>=30_000))advanceDayClock(cached,p,now) else cached
             if(view!=null) { recentDays.put(key,view,0,p.generation,now);return@withLock view }
         }
         buildDay(date,true)
@@ -237,7 +239,7 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
         val raw=dao.observations(start,w.end+86_400_000L).map { WoJson.decodeFromString<Observation>(it.json) }
         val ann=dao.annotations().map { WoJson.decodeFromString<Annotation>(it.json) }
         val cs=dao.coverage(w.start,w.end).map { WoJson.decodeFromString<Coverage>(it.json) }
-        val places=places(); val now=System.currentTimeMillis()
+        val places=places(); val now=clock()
         val previous=dao.episodes(w.start,w.end).associateBy { it.id }
         val retired=previous.values.map { WoJson.decodeFromString<Episode>(it.json) }.filter { e->e.evidence.any { !it.rawAvailable } }
         val archivedMetrics=if(cached!=null && w.end<now-config.rawRetentionDays*86_400_000L && p.exclusions.none { (it.source==null||it.source in setOf(Source.HEALTH,Source.STEPS))&&it.startMs<w.end&&(it.endMs?:Long.MAX_VALUE)>w.start })WoJson.decodeFromString<DayView>(cached.json).metrics else emptyList()
@@ -259,7 +261,7 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
             dao.putMeta(MetaRow(dayKey(date,zone.id),snapshotPolicy()))
             dao.putMetrics(view.metrics.map { MetricRow(date.toString(),zone.id,it.key,WoJson.encodeToString(it)) })
         }
-        recentDays.put(dayKey(date,zone.id),view,0,p.generation,System.currentTimeMillis())
+        recentDays.put(dayKey(date,zone.id),view,0,p.generation,clock())
         return view
     }
     suspend fun history(): List<DayView> = dao.summaries(90).map { WoJson.decodeFromString(it.json) }

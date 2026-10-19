@@ -272,6 +272,11 @@ class DayDrumUiTest {
                 view.draw(Canvas(b));color=b.getPixel(4,300);b.recycle()
             };return color
         }
+        // The fallback projection runs on Default; sample the ready timeline, as a user sees it.
+        compose.waitUntil(timeoutMillis=5_000) {
+            compose.onAllNodesWithTag("drum-selected-time").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("drum-selected-time").assertTextEquals("09:00–11:00")
         val daytime=sample();capture("35-event-daylight")
         compose.onNodeWithTag("day-time-scrubber").performSemanticsAction(SemanticsActions.SetProgress){it(.99f)}
         compose.onNodeWithTag("drum-selected-time").assertTextEquals("20:00–21:00")
