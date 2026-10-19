@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.HuaweiHealthRepositoryTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-19T07:20:38.440Z" hostname="ef31637d2f53" time="0.323">
+  <properties/>
+  <testcase name="emptyIncompleteSnapshotDoesNotDeleteEarlierSessions" classname="com.personal.wo.HuaweiHealthRepositoryTest" time="0.05"/>
+  <testcase name="snapshotsStayProviderAndKindIsolatedAndRepeatedSyncIsIdempotent" classname="com.personal.wo.HuaweiHealthRepositoryTest" time="0.088"/>
+  <testcase name="pauseGenerationPreventsLateIngestionAndDeletedRecordsDoNotReimport" classname="com.personal.wo.HuaweiHealthRepositoryTest" time="0.061"/>
+  <testcase name="withdrawalClearsRawDerivedAndSnapshotDataAndKeepsHardwareAndLegacyHealthConnect" classname="com.personal.wo.HuaweiHealthRepositoryTest" time="0.078"/>
+  <testcase name="crossMidnightSessionsUpsertByAccountKindAndNativeId" classname="com.personal.wo.HuaweiHealthRepositoryTest" time="0.046"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

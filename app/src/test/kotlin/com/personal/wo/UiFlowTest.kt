@@ -236,11 +236,13 @@ class UiFlowTest {
         capture("14-app-connection")
     }
     @Test fun sourcePageDisclosesHuaweiAccountNotConnectedAndShowsBackgroundHelp() {
-        val s=state().copy(demo=false,appsLoaded=true,sources=listOf(SourceState(Source.HEALTH,supported=false)))
+        val s=state().copy(demo=false,appsLoaded=true,sources=listOf(SourceState(Source.HEALTH,supported=false)),
+            huawei=com.personal.wo.health.HuaweiState(com.personal.wo.health.HuaweiPhase.NOT_CONFIGURED,detail="尚未提供真实App ID和获批读取范围"))
         compose.setContent { WoTheme(dark=false) { ConnectionsPage(s,{},{_,_->},{_,_->},{_,_->},{},{},{},{}) } }
         compose.onNodeWithText("来源与后台").performClick()
-        compose.onNodeWithTag("connections-list").performScrollToNode(hasText("账号数据尚未接入"))
-        compose.onNodeWithText("账号数据尚未接入").assertIsDisplayed()
+        compose.onNodeWithTag("connections-list").performScrollToNode(hasText("待平台开通"))
+        compose.onNodeWithText("待平台开通").assertIsDisplayed()
+        compose.onNodeWithText("华为账号授权").assertDoesNotExist()
         capture("15-huawei-status")
         compose.onNodeWithTag("connections-list").performScrollToNode(hasText("需要一直开着吗？"))
         compose.onNodeWithTag("connections-list").performScrollToIndex(3)

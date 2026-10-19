@@ -9,6 +9,8 @@ import androidx.work.Configuration
 import com.personal.wo.core.*
 import com.personal.wo.data.*
 import com.personal.wo.collector.*
+import com.personal.wo.health.HuaweiHealthFactory
+import com.personal.wo.health.HuaweiHealthController
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.serialization.decodeFromString
@@ -63,6 +65,7 @@ class Graph(val context: Context) {
     val db: WoDatabase
     val repo: WoRepository
     val collector: PullCollectors
+    val huawei: HuaweiHealthController
     private data class Submission(val observation: Observation,val generation: Long)
     private val queue = Channel<Submission>(config.queueCapacity)
     private val dropped = AtomicLong(0)
@@ -70,7 +73,8 @@ class Graph(val context: Context) {
         System.loadLibrary("sqlcipher")
         db = Room.databaseBuilder(context,WoDatabase::class.java,"wo.db").openHelperFactory(SupportOpenHelperFactory(vault.password())).setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING).addCallback(DatabaseOpenCallback()).build()
         repo = WoRepository(db,vault,config,context)
-        collector = PullCollectors(context,repo)
+        huawei = HuaweiHealthFactory.create(context,repo)
+        collector = PullCollectors(context,repo,huawei)
         scope.launch {
             while(isActive) {
                 val first=queue.receive(); val batch=mutableListOf(first)

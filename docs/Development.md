@@ -1,8 +1,12 @@
+<!-- 2026-10-19 增补；下文历史版本说明保留 -->
+
+本轮1.7.1增量：`personalEnhanced`已加入官方原生Android HMS Health SDK及真实调用接口。最新申请材料、资格限制、配置字段与实现边界见[华为正式接入准备](Huawei_Health_Integration.md)。下文1.3.x章节中“未加入SDK”的叙述为历史状态。默认没有真实App ID和获批Scope，仍未完成真实账号接入。
+
 # “我” Android 开发说明
 
 文档更新：2026-10-16（Asia/Shanghai）
 
-对应应用版本：1.6.0；数据库版本：Room V1；包名：`com.personal.wo`。
+对应应用版本：1.7.1；数据库版本：Room V1；包名：`com.personal.wo`。
 
 本仓库包含 1.0.0 基础功能、1.0.1 启动异常处理、1.0.2 数据库打开回调修复、1.1.0界面重构、1.2.0直接授权/计步兼容/每日总结，以及1.3.0时间线首页/应用连接/采集提效。最新构建结果见 Verification.md，原 1.0.0 验证记录保存在 archive/v1.0.0/。修复范围和实际设备验证边界见 [HarmonyOS 启动修复说明](HarmonyOS_4.2.0_Startup_Fix.md)。
 

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.core.HealthSourcesTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-19T06:56:07.867Z" hostname="ef31637d2f53" time="0.083">
+  <properties/>
+  <testcase name="archiveDayBoundariesRespectTimeZoneAndDst" classname="com.personal.wo.core.HealthSourcesTest" time="0.045"/>
+  <testcase name="disabledOrExcludedAccountSourceFallsBackToHardware" classname="com.personal.wo.core.HealthSourcesTest" time="0.031"/>
+  <testcase name="providerSnapshotsDoNotEraseTheOtherDay" classname="com.personal.wo.core.HealthSourcesTest" time="0.001"/>
+  <testcase name="absentInvalidOrFutureTotalsFallBackWithoutInventingZero" classname="com.personal.wo.core.HealthSourcesTest" time="0.001"/>
+  <testcase name="independentDailyTotalsAndSensorDeltasAreNeverAdded" classname="com.personal.wo.core.HealthSourcesTest" time="0.001"/>
+  <testcase name="latestCorrectionCanDecreaseAndRealZeroDoesNotFallBack" classname="com.personal.wo.core.HealthSourcesTest" time="0.002"/>
+  <testcase name="legacyHealthConnectRowsAndSensorOnlyModeRemainReadable" classname="com.personal.wo.core.HealthSourcesTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

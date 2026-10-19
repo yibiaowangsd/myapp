@@ -16,6 +16,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.personal.wo.collector.Capabilities
 import com.personal.wo.collector.DirectPermissionPlan
 import com.personal.wo.collector.OptionalHealthPermissionContract
@@ -39,6 +40,13 @@ class MainActivity:ComponentActivity() {
         }
     }
     private val health=registerForActivityResult(OptionalHealthPermissionContract()) { if(::vm.isInitialized)vm.permissionsChanged() }
+    private val huaweiResult=registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result->
+        lifecycleScope.launch {
+            recoverableTask { wo().graph().huawei.finishAuthorization(result.resultCode==RESULT_OK,result.data) }
+                .onFailure { if(::vm.isInitialized)vm.message("未能验证华为授权，请重试") }
+            if(::vm.isInitialized)vm.permissionsChanged()
+        }
+    }
     private val settingsResult=registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { if(::vm.isInitialized) { if(quickActive)advanceQuickPermissions() else vm.permissionsChanged() } }
     private val archive=registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> uri?.let { vm.export(it,true) } }
     private val summary=registerForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri -> uri?.let { vm.export(it,false) } }
@@ -172,4 +180,17 @@ class MainActivity:ComponentActivity() {
             runOnUiThread { health.launch(request) }
         } else vm.message("此健康Provider不支持后台读取，打开应用时仍会同步")
     }.onFailure { vm.message("此设备没有可用的健康后台授权入口") } } }
+    fun requestHuaweiAuthorization() {
+        if(!::vm.isInitialized)return
+        lifecycleScope.launch {
+            val g=wo().graph()
+            val controller=g.huawei
+            if(controller.config.blockingReason==null&&Source.HEALTH !in g.repo.cachedPolicy.enabledSources)
+                g.repo.configure { it.copy(enabledSources=it.enabledSources+Source.HEALTH) }
+            recoverableTask { huaweiResult.launch(controller.beginAuthorization()) }.onFailure {
+                controller.finishAuthorization(false,null)
+                vm.message(it.message ?: "华为官方授权入口暂不可用")
+            }
+        }
+    }
 }

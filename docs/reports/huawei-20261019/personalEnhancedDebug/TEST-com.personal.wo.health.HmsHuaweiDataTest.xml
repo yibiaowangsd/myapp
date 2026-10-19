@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.health.HmsHuaweiDataTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-19T07:20:14.332Z" hostname="ef31637d2f53" time="3.714">
+  <properties/>
+  <testcase name="explicitZeroAndInclusiveLastMillisecondAreAccepted" classname="com.personal.wo.health.HmsHuaweiDataTest" time="3.561"/>
+  <testcase name="timezoneMismatchDoesNotBecomeArchiveDayData" classname="com.personal.wo.health.HmsHuaweiDataTest" time="0.045"/>
+  <testcase name="unsetCountOrAbsentDayDoesNotInventZero" classname="com.personal.wo.health.HmsHuaweiDataTest" time="0.039"/>
+  <testcase name="scopesMatchTheInstalledNativeSdkReadOnlyConstants" classname="com.personal.wo.health.HmsHuaweiDataTest" time="0.039"/>
+  <testcase name="ambiguousDeviceTotalsAreNotAdded" classname="com.personal.wo.health.HmsHuaweiDataTest" time="0.029"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[[Robolectric] WARN: Android SDK 36 requires Java 21 (have Java 17). Tests won't be run on SDK 36 unless explicitly requested.
+]]></system-err>
+</testsuite>

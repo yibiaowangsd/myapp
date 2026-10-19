@@ -9,6 +9,7 @@ import com.personal.wo.*
 import com.personal.wo.core.*
 import com.personal.wo.data.*
 import com.personal.wo.collector.*
+import com.personal.wo.health.HuaweiState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
@@ -24,7 +25,8 @@ data class WoUiState(
     val diagnostics:List<String> = emptyList(),val positions:List<Observation> = emptyList(),
     val apps:List<ConnectedApp> = emptyList(),val appsLoaded:Boolean=false,
     val homeAppMinMinutes:Int=10,
-    val achievements:AchievementSnapshot?=null,val achievementsLoading:Boolean=false,val achievementError:String?=null
+    val achievements:AchievementSnapshot?=null,val achievementsLoading:Boolean=false,val achievementError:String?=null,
+    val huawei:HuaweiState=HuaweiState()
 )
 class WoViewModel(application:Application):AndroidViewModel(application) {
     private val app=application as WoApplication
@@ -34,6 +36,7 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     private var loadJob:Job?=null
     private var searchJob:Job?=null
     private var initializationJob:Job?=null
+    private var huaweiStateJob:Job?=null
     private var foregroundJob:Job?=null
     private var initialReady=CompletableDeferred<Unit>()
     @Volatile private var synchronizing=false
@@ -52,6 +55,8 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         initializationJob=viewModelScope.launch(Dispatchers.IO) {
             recoverableTask {
                 val g=app.graph()
+                huaweiStateJob?.cancel()
+                huaweiStateJob=viewModelScope.launch { g.huawei.state.collect { state->mutable.update { it.copy(huawei=state) } } }
                 val zone=ZoneId.of(g.repo.cachedPolicy.archiveZone);mutable.update { it.copy(policy=g.repo.cachedPolicy,selectedDate=LocalDate.now(zone).toString()) }
                 val date=LocalDate.parse(mutable.value.selectedDate)
                 val first=g.repo.cachedDay(date) ?: g.repo.currentDay(date)
@@ -158,6 +163,7 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         }
     }
     fun permissionsChanged() { synchronize(true) }
+    fun revokeHuawei()=action { g->g.huawei.revoke() }
     fun completeDirectSetup() {
         if(!mutable.value.policy.requested && mutable.value.policy.startedMs==null) beginRecording(mutable.value.policy.enabledSources)
         else permissionsChanged()

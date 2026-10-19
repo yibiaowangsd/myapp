@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.personal.wo.HuaweiHealthControllerTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-19T07:20:38.004Z" hostname="ef31637d2f53" time="0.429">
+  <properties/>
+  <testcase name="revokedInFlightResultCannotWriteOrReconnect" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.053"/>
+  <testcase name="unconfiguredAndSignatureMismatchNeverInvokeSdk" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.033"/>
+  <testcase name="networkFailureIsRetryableAndNeverReadAfterFailedValidation" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.02"/>
+  <testcase name="cancellationIsNotReportedAsSuccessfulSync" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.02"/>
+  <testcase name="accountSwitchAndPartialScopeWithdrawalClearOldImportedData" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.025"/>
+  <testcase name="cancelAndRejectDoNotProduceAConnection" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.022"/>
+  <testcase name="processRestartHasNoTrustedGrantedStateAndBackgroundNeverReads" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.037"/>
+  <testcase name="emptySuccessfulQueryIsNotSyntheticData" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.023"/>
+  <testcase name="noHistoryScopePreventsQueriesBeforeConsentAndPartialDailyTotals" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.023"/>
+  <testcase name="externalRevocationPurgesOnlyHuaweiSinkAndStopsFutureReads" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.066"/>
+  <testcase name="approvalAndDeviceInstallationAreNotUserAuthorization" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.029"/>
+  <testcase name="revocationFailureStaysPendingAcrossRestartUntilOfficialConfirmation" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.029"/>
+  <testcase name="onlyApprovedAndActuallyGrantedReadScopesAreUsed" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.025"/>
+  <testcase name="sdkSuccessCallbackStillNeedsAnActualScopeAndHealthAppCheck" classname="com.personal.wo.HuaweiHealthControllerTest" time="0.021"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

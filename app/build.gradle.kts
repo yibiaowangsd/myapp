@@ -5,6 +5,14 @@ plugins {
     kotlin("plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+// Local/CI non-secret application registration values. Empty defaults deliberately block authorization.
+val huaweiAppId = providers.gradleProperty("wo.huawei.appId").orElse("").get()
+val huaweiScopes = providers.gradleProperty("wo.huawei.approvedScopes").orElse("").get()
+val huaweiCertificate = providers.gradleProperty("wo.huawei.certificateSha256")
+    .orElse("c9b24de261dc30ebbc92da22f3f7826beb2c3015141c7b43d63b1ca27de9cb58").get()
+require(huaweiAppId.isEmpty() || huaweiAppId.matches(Regex("[0-9]+"))) { "Huawei App ID must be the actual numeric registration ID" }
+require(huaweiScopes.isEmpty() || huaweiScopes.split(",").all { it in setOf("STEPS","EXERCISE","SLEEP","HISTORY_WEEK") }) { "Unknown Huawei scope name" }
+require(huaweiCertificate.matches(Regex("[a-fA-F0-9]{64}"))) { "Huawei certificate must be 64 hex SHA-256 characters" }
 android {
     namespace = "com.personal.wo"
     compileSdk = 36
@@ -15,13 +23,23 @@ android {
         targetSdk = 36
         versionCode = 12
         versionName = "1.7.1"
+        buildConfigField("String", "HUAWEI_APP_ID", "\"\"")
+        buildConfigField("String", "HUAWEI_APPROVED_SCOPES", "\"\"")
+        buildConfigField("String", "HUAWEI_CERT_SHA256", "\"\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         kapt { arguments { arg("room.schemaLocation", "$projectDir/schemas") } }
     }
     flavorDimensions += "connectivity"
     productFlavors {
         create("personalOffline") { dimension = "connectivity"; buildConfigField("boolean", "ENHANCED", "false") }
-        create("personalEnhanced") { dimension = "connectivity"; buildConfigField("boolean", "ENHANCED", "true") }
+        create("personalEnhanced") {
+            dimension = "connectivity"; buildConfigField("boolean", "ENHANCED", "true")
+            buildConfigField("String", "HUAWEI_APP_ID", "\"$huaweiAppId\"")
+            buildConfigField("String", "HUAWEI_APPROVED_SCOPES", "\"$huaweiScopes\"")
+            buildConfigField("String", "HUAWEI_CERT_SHA256", "\"$huaweiCertificate\"")
+            manifestPlaceholders["huaweiAppId"] = "appid=$huaweiAppId"
+            proguardFile("proguard-huawei.pro")
+        }
     }
     signingConfigs {
         val releaseStore = providers.environmentVariable("WO_KEYSTORE_PATH").orNull
@@ -50,6 +68,7 @@ android {
     lint { abortOnError = true; disable += "ObsoleteLintCustomCheck" }
 }
 dependencies {
+    "personalEnhancedImplementation"("com.huawei.hms:health:6.16.0.300")
     implementation(project(":core"))
     implementation(platform("androidx.compose:compose-bom:2025.10.01"))
     implementation("androidx.compose.ui:ui")

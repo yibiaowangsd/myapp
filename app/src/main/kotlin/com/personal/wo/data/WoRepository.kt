@@ -72,7 +72,8 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
         }
     }
     suspend fun log(code: String, count: Long = 0) = mutex.withLock { dao.putOperation(OperationRow(UUID.randomUUID().toString(),System.currentTimeMillis(),code,count)) }
-    suspend fun ingest(batch: List<Observation>, expectedGeneration: Long, source: Source? = null, cursor: String? = null, coverageSpan: Span? = null, replaceSpan: Span? = null) = mutex.withLock {
+    suspend fun ingest(batch: List<Observation>, expectedGeneration: Long, source: Source? = null, cursor: String? = null, coverageSpan: Span? = null, replaceSpan: Span? = null,
+        replaceHealthProvider:String?=null,replaceKinds:Set<Kind>?=null) = mutex.withLock {
         val p = cachedPolicy
         if (!p.requested || p.paused || p.generation!=expectedGeneration) return@withLock
         val used=context.getDatabasePath("wo.db").length()+context.getDatabasePath("wo.db-wal").length()
@@ -90,7 +91,19 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
         db.withTransaction {
             if(full)dao.putOperation(OperationRow("storage-budget",System.currentTimeMillis(),"D001_STORAGE_BUDGET",batch.size.toLong()))
             if(full&&resourceStop==null)savePolicy(p.copy(generation=p.generation+1,exclusions=p.exclusions+Exclusion("resource-${System.currentTimeMillis()}",System.currentTimeMillis(),reason="RESOURCE_LIMIT")))
-            if (replaceSpan != null && source != null) dao.clearSourceRange(source.name,replaceSpan.start,replaceSpan.end)
+            if (replaceSpan != null && source != null) {
+                if(source==Source.HEALTH) {
+                    require(replaceHealthProvider in setOf(HUAWEI_HEALTH,HEALTH_CONNECT)) { "Health snapshots must identify their provider" }
+                    val old=dao.healthObservations().filter { row ->
+                        val observation=WoJson.decodeFromString<Observation>(row.json)
+                        row.startMs<replaceSpan.end&&row.endMs>replaceSpan.start&&healthProvider(observation)==replaceHealthProvider&&
+                            (replaceKinds==null||observation.kind in replaceKinds)
+                    }
+                    dao.deleteObservations(old.map { it.id })
+                } else dao.clearSourceRange(source.name,replaceSpan.start,replaceSpan.end)
+                // Empty snapshots and downward corrections must also invalidate day caches.
+                dao.putDirty(DirtyRow(UUID.randomUUID().toString(),replaceSpan.start,replaceSpan.end,p.generation,"RECONCILE"))
+            }
             dao.putObservations(filtered.map { ObservationRow(it.id,it.source.name,it.sourceKey,it.kind.name,it.startMs,it.endMs,it.receivedMs,WoJson.encodeToString(it)) })
             filtered.filter { it.kind==Kind.PHOTO }.forEach { dao.putMedia(MediaRow(it.id,it.sourceKey,it.payload.uri,it.startMs)) }
             if (filtered.isNotEmpty()) dao.putDirty(DirtyRow(UUID.randomUUID().toString(),filtered.minOf { it.startMs },filtered.maxOf { maxOf(it.endMs,it.startMs+1) },p.generation,"INGEST"))
@@ -105,6 +118,36 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
             }
         }
         notifyChange()
+    }
+    /** V1-compatible provider cleanup. Never delete phone or Health Connect rows. */
+    suspend fun retainHuaweiHealth(kinds:Set<Kind>)=mutex.withLock {
+        val raw=dao.healthObservations().filter { row ->
+            val o=WoJson.decodeFromString<Observation>(row.json)
+            healthProvider(o)==HUAWEI_HEALTH&&o.kind !in kinds
+        }
+        val episodes=dao.healthEpisodes().filter { row ->
+            val e=WoJson.decodeFromString<Episode>(row.json)
+            HUAWEI_HEALTH in e.qualityFlags&&when(e.kind) { "STEPS"->Kind.HEALTH_STEPS;"SLEEP"->Kind.SLEEP;else->Kind.EXERCISE } !in kinds
+        }
+        val removedIds=raw.map { it.id }.toSet()
+        val summaries=dao.summaries(Int.MAX_VALUE).filter { row ->
+            val day=WoJson.decodeFromString<DayView>(row.json)
+            day.metrics.any { m->m.evidenceIds.any { it in removedIds } }||day.episodes.any { e->
+                HUAWEI_HEALTH in e.qualityFlags&&when(e.kind) { "STEPS"->Kind.HEALTH_STEPS;"SLEEP"->Kind.SLEEP;else->Kind.EXERCISE } !in kinds
+            }
+        }
+        if(raw.isEmpty()&&episodes.isEmpty()&&summaries.isEmpty())return@withLock
+        db.withTransaction {
+            dao.deleteObservations(raw.map { it.id })
+            val ids=episodes.map { it.id }
+            ids.forEach { dao.removeIndex(it);dao.clearEvidence(it) }
+            dao.deleteRelations(ids);dao.deleteAnnotations(ids);dao.deleteEpisodes(ids)
+            summaries.forEach { row->dao.deleteSummaries(row.date,row.date);dao.deleteMetrics(row.date,row.date) }
+            (raw.map { Span(it.startMs,it.endMs) }+episodes.map { Span(it.startMs,it.endMs) }).forEach {
+                dao.putDirty(DirtyRow(UUID.randomUUID().toString(),it.start,it.end,cachedPolicy.generation,"HUAWEI_REVOKE"))
+            }
+        }
+        recentDays.clear();notifyChange()
     }
     suspend fun coverage(source: Source,start: Long,end: Long,available: Boolean,detail: String) = mutex.withLock {
         if(end>start) dao.putCoverage(CoverageRow(stableId(source,start,end,available),source.name,start,end,WoJson.encodeToString(Coverage(source,start,end,available,detail))))

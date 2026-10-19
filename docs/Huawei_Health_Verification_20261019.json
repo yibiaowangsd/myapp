@@ -1,0 +1,360 @@
+{
+  "date": "2026-10-19",
+  "baseline": "8dd3ddc2e6ff61dfc608cdae0e3d5c635aaf1f63",
+  "sdk": "com.huawei.hms:health:6.16.0.300",
+  "environment": {
+    "jdk": "17.0.16",
+    "gradle": "8.13",
+    "androidCompileSdk": 36,
+    "robolectricApi": 35
+  },
+  "tests": {
+    "core": {
+      "totals": {
+        "tests": 100,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "classes": [
+        {
+          "class": "com.personal.wo.core.AchievementsTest",
+          "tests": 25,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.core.DailyRecapTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.core.DayChaptersTest",
+          "tests": 12,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.core.DayMomentsTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.core.DayPerformanceTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.core.DayPresentationTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.core.EngineTest",
+          "tests": 33,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.core.HealthSourcesTest",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.core.StepReadingsTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.core.StreamingCryptoTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    },
+    "personalOfflineDebug": {
+      "totals": {
+        "tests": 111,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "classes": [
+        {
+          "class": "com.personal.wo.AchievementStoreTest",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.AchievementsUiTest",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.CollectionEfficiencyTest",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.DatabaseOpenCallbackTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.DayCacheTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.DayDrumUiTest",
+          "tests": 17,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.DirectPermissionPlanTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.HuaweiHealthControllerTest",
+          "tests": 14,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.HuaweiHealthRepositoryTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.MainNavigationTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.StartupRecoveryTest",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.StepSensorsTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.TimelineWheelTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.UiFlowTest",
+          "tests": 18,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    },
+    "personalEnhancedDebug": {
+      "totals": {
+        "tests": 116,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "classes": [
+        {
+          "class": "com.personal.wo.AchievementStoreTest",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.AchievementsUiTest",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.CollectionEfficiencyTest",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.DatabaseOpenCallbackTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.DayCacheTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.DayDrumUiTest",
+          "tests": 17,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.DirectPermissionPlanTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.HuaweiHealthControllerTest",
+          "tests": 14,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.HuaweiHealthRepositoryTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.MainNavigationTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.StartupRecoveryTest",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.StepSensorsTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.TimelineWheelTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.UiFlowTest",
+          "tests": 18,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "class": "com.personal.wo.health.HmsHuaweiDataTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    }
+  },
+  "lint": {
+    "personalOfflineDebug": {
+      "Warning": 43
+    },
+    "personalEnhancedDebug": {
+      "Warning": 39
+    }
+  },
+  "realDeviceAuthorization": "not_performed",
+  "platformApproval": "not_obtained",
+  "personalReleaseSignatureVerification": "not_performed",
+  "releaseR8": "passed_unsigned",
+  "ciDebugVerification": "https://github.com/yibiaowangsd/myapp/actions/runs/39214262708",
+  "buildTargets": [
+    "personalOfflineDebug",
+    "personalEnhancedDebug",
+    "personalEnhancedRelease"
+  ],
+  "artifacts": {
+    "personalOfflineDebug": {
+      "sha256": "ec538651ec552ae7aefdff97b361e03fadb02cf6c3513a52760a0cb069fd166f",
+      "bytes": 83931392,
+      "signedWithOriginalPersonalCertificate": false
+    },
+    "personalEnhancedDebug": {
+      "sha256": "4cb4973e88bad10c707f30d715dfa12d9c484e3bbbc382ac46a75ea90edd38dd",
+      "bytes": 112030569,
+      "signedWithOriginalPersonalCertificate": false
+    },
+    "personalEnhancedRelease": {
+      "sha256": "1bae63a2e71f342e745effb5b4256fbe55ab1067b32d36843efbaaa9cedb1f67",
+      "bytes": 10781781,
+      "signedWithOriginalPersonalCertificate": false
+    }
+  },
+  "dependencyVerification": "passed_strict_production_compile_and_runtime_classpaths",
+  "verifiedConfigurations": [
+    "Verified personalOfflineDebugCompileClasspath: 67 artifacts",
+    "Verified personalOfflineDebugRuntimeClasspath: 92 artifacts",
+    "Verified personalEnhancedDebugCompileClasspath: 86 artifacts",
+    "Verified personalEnhancedDebugRuntimeClasspath: 111 artifacts",
+    "Verified personalEnhancedReleaseCompileClasspath: 83 artifacts",
+    "Verified personalEnhancedReleaseRuntimeClasspath: 107 artifacts"
+  ]
+}

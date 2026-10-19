@@ -35,6 +35,8 @@ data class EvidenceRow(val episodeId: String, val evidenceKey: String, val snaps
     @Query("SELECT * FROM observation WHERE sourceId='LOCATION' AND startMs<:end AND endMs>=:start ORDER BY startMs LIMIT 10000") suspend fun positions(start:Long,end:Long):List<ObservationRow>
     @Query("SELECT * FROM observation ORDER BY startMs LIMIT :limit OFFSET :offset") suspend fun allObservations(limit: Int, offset: Int): List<ObservationRow>
     @Upsert suspend fun putObservations(rows: List<ObservationRow>)
+    @Query("SELECT * FROM observation WHERE sourceId='HEALTH'") suspend fun healthObservations():List<ObservationRow>
+    @Query("SELECT * FROM episode WHERE kind IN ('STEPS','SLEEP','EXERCISE')") suspend fun healthEpisodes():List<EpisodeRow>
     @Query("DELETE FROM observation WHERE sourceId=:source AND startMs<:end AND endMs>=:start") suspend fun clearSourceRange(source: String, start: Long, end: Long)
     @Query("DELETE FROM observation WHERE id IN (:ids)") suspend fun deleteObservations(ids: List<String>)
     @Query("DELETE FROM observation WHERE (sourceId='NOTIFICATION' AND receivedMs<:noticeCutoff) OR receivedMs<:rawCutoff") suspend fun expireObservations(noticeCutoff: Long, rawCutoff: Long)
