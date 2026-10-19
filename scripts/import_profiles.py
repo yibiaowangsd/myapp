@@ -16,5 +16,6 @@ for name in ("baseline-prof.txt","startup-prof.txt"):
                if "Lcom/personal/wo/" in line and not line.lstrip().startswith("#")}
     if not collected:raise SystemExit("No app-owned rules in "+name)
     rules={line for line in current if line and not line.startswith("#")}|collected
+    if name=="startup-prof.txt" and any("*" in line for line in rules):raise SystemExit("Startup Profiles require exact bytecode descriptors")
     target.write_text("# Source rules plus device-generated rules; benchmark output retained in CI.\n"+"\n".join(sorted(rules))+"\n")
     print(name+": "+str(len(collected))+" collected app rules")

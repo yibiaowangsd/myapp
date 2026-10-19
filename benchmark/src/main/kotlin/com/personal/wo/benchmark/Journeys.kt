@@ -17,7 +17,7 @@ internal fun prepareTestApp() {
     device.executeShellCommand("appops set $PACKAGE GET_USAGE_STATS allow")
     device.executeShellCommand("cmd notification allow_listener $PACKAGE/.collector.NoticeListener")
     val context=InstrumentationRegistry.getInstrumentation().context
-    context.startActivity(context.packageManager.getLaunchIntentForPackage(PACKAGE)!!.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    context.startActivity(Intent().setClassName(PACKAGE,"$PACKAGE.MainActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     check(device.wait(Until.hasObject(By.res("day-drum-home")),20_000)){"Main screen did not become ready"}
     device.pressHome()
 }
