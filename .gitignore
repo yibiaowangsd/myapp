@@ -12,6 +12,8 @@ keystore.properties
 .env
 .env.*
 signing.json
+huawei-health.properties
+agconnect-services.json
 .release-signing/
 *.p12
 *.pfx

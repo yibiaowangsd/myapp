@@ -19,10 +19,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.personal.wo.collector.*
 import com.personal.wo.core.*
+import com.personal.wo.MainActivity
+import com.personal.wo.health.HuaweiPhase
 
 @Composable fun ConnectionsPage(s:WoUiState,authorize:(Source)->Unit,source:(Source,Boolean)->Unit,
     included:(String,Boolean)->Unit,notices:(String,Boolean)->Unit,reload:()->Unit,permissions:()->Unit,
-    reconnectSteps:()->Unit,message:(String)->Unit) {
+    reconnectSteps:()->Unit,message:(String)->Unit,revokeHuawei:()->Unit={},syncHuawei:()->Unit={}) {
     val context=LocalContext.current
     var details by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
@@ -69,8 +71,17 @@ import com.personal.wo.core.*
                 }
                 HorizontalDivider()
                 Text("华为运动健康",style=MaterialTheme.typography.titleMedium)
-                StatusPill("账号数据尚未接入")
-                Muted("华为账号里的手表、手环和历史步数，需要先开通应用的数据访问资格，再由你授权。当前版本的手机计步独立工作。")
+                StatusPill(s.huawei.label)
+                Muted(s.huawei.detail)
+                Muted("需平台开通与本人授权；手机计步独立工作。个人开发者仅可申请基础数据，睡眠需符合高阶数据资质。")
+                if(s.huawei.phase !in setOf(HuaweiPhase.NOT_CONFIGURED,HuaweiPhase.UNAVAILABLE)) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick={ (context as? MainActivity)?.requestHuaweiAuthorization() },
+                            enabled=s.huawei.phase !in setOf(HuaweiPhase.AUTHORIZING,HuaweiPhase.REVOKE_PENDING)){Text("华为账号授权")}
+                        TextButton(onClick=revokeHuawei,enabled=s.huawei.phase!=HuaweiPhase.AUTHORIZING){Text(if(s.huawei.phase==HuaweiPhase.REVOKE_PENDING)"重试撤销授权" else "撤销授权并清理导入")}
+                        if(s.huawei.granted.isNotEmpty())TextButton(onClick=syncHuawei){Text("同步账号数据")}
+                    }
+                }
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick={
                         val intent=context.packageManager.getLaunchIntentForPackage("com.huawei.health")

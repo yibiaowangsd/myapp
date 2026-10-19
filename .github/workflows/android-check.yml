@@ -31,7 +31,9 @@ jobs:
       - name: Install compile SDK
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Compile and run regression tests
-        run: bash gradlew --no-daemon --max-workers=2 :core:test :app:testPersonalEnhancedDebugUnitTest :app:assemblePersonalEnhancedDebug --stacktrace
+        run: bash gradlew --no-daemon --no-parallel --max-workers=1 :core:test :app:testPersonalOfflineDebugUnitTest :app:testPersonalEnhancedDebugUnitTest :app:lintPersonalOfflineDebug :app:lintPersonalEnhancedDebug :app:assemblePersonalOfflineDebug :app:assemblePersonalEnhancedDebug --stacktrace
+      - name: Check database schema compatibility
+        run: python scripts/verify_schema.py
       - name: Preserve test reports and rendered fixtures
         if: always()
         uses: actions/upload-artifact@v4

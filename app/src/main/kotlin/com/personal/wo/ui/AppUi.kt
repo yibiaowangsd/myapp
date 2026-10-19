@@ -58,7 +58,7 @@ import java.time.format.DateTimeFormatter
                 if(s.busy)LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
                 if(!s.loaded)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
                 else holder.SaveableStateProvider(if(page.isBlank())"tab-$tab" else page) { when(page){
-                    "connections"->ConnectionsPage(s,authorize,vm::source,vm::appIncluded,vm::appNotices,vm::loadApps,{setup()},vm::reconnectSteps,{vm.message(it)})
+                    "connections"->ConnectionsPage(s,authorize,vm::source,vm::appIncluded,vm::appNotices,vm::loadApps,{setup()},vm::reconnectSteps,{vm.message(it)},vm::revokeHuawei,vm::permissionsChanged)
                     "setup"->PermissionCenter(s,authorize,vm::source,background,{(context as? MainActivity)?.requestStatusNotification()},{if(s.policy.requested&&!s.policy.paused)vm.refresh() else vm.recording(if(s.policy.paused)"resume" else "start")},{(context as? MainActivity)?.requestHealthBackground()},{(context as? MainActivity)?.requestMissingPermissions()},vm::reconnectSteps)
                     "insights"->InsightPage(s)
                     "search"->SearchPage(s,vm,::open)

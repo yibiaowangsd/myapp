@@ -8,7 +8,7 @@ class DayEngine(val config: EngineConfig = EngineConfig()) {
     private fun evidence(o: Observation, description: String) = Evidence(o.id, o.source, o.sourceKey, description)
 
     fun episodes(input: List<Observation>, policy: Policy, places: List<Place>, asOf: Long): List<Episode> {
-        val observations = input.distinctBy { it.source to it.sourceKey }
+        val observations = selectStepSources(input.flatMap { filterObservation(it, policy) }, ZoneId.of(policy.archiveZone), asOf)
             .filter { it.startMs >= 0 && it.endMs >= it.startMs && it.startMs <= asOf + 8 * 86_400_000L }
             .flatMap { filterObservation(it, policy) }.sortedWith(compareBy({ it.startMs }, { it.id }))
         val result = mutableListOf<Episode>()
@@ -31,10 +31,13 @@ class DayEngine(val config: EngineConfig = EngineConfig()) {
                     detail = "日历中的计划，实际出席未确认${if (p.allDay) " · 全天" else ""}", evidence = listOf(evidence(o, "只读日历实例")))
                 Kind.EXERCISE -> Episode(stableId("exercise", o.sourceKey), startMs = o.startMs, endMs = o.endMs,
                     lane = Lane.ACTIVITY, kind = "EXERCISE", assertion = Assertion.RECORDED, title = "来源记录的运动",
-                    detail = p.label, evidence = listOf(evidence(o, "Health Connect运动记录")))
+                    detail = p.label, evidence = listOf(evidence(o, "${if(healthProvider(o)==HUAWEI_HEALTH) "华为运动健康" else "Health Connect"}运动记录")))
                 Kind.SLEEP -> Episode(stableId("sleep", o.sourceKey), startMs = o.startMs, endMs = o.endMs,
                     lane = Lane.ACTIVITY, kind = "SLEEP", assertion = Assertion.RECORDED, title = "来源记录的睡眠区间",
-                    detail = "${p.label}；区间跨度不等于去除清醒后的睡眠时长", evidence = listOf(evidence(o, "Health Connect睡眠会话")), amount = p.sleepMinutes)
+                    detail = "${p.label}；区间跨度不等于去除清醒后的睡眠时长", evidence = listOf(evidence(o, "${if(healthProvider(o)==HUAWEI_HEALTH) "华为运动健康" else "Health Connect"}睡眠会话")), amount = p.sleepMinutes)
+                Kind.HEALTH_STEPS -> Episode(stableId("health.steps", o.sourceKey), startMs=o.startMs, endMs=minOf(o.endMs,asOf),
+                    lane=Lane.ACTIVITY, kind="STEPS", assertion=Assertion.RECORDED, title="来源记录到${p.steps}步",
+                    detail="${p.label}；当日可见聚合，未叠加手机计步", evidence=listOf(evidence(o,"${p.label}日聚合")), amount=p.steps)
                 Kind.STEP_DELTA -> if ((p.steps ?: 0) > 0) Episode(stableId("steps", o.sourceKey), startMs = o.startMs, endMs = o.endMs,
                     lane = Lane.ACTIVITY, kind = "STEPS", assertion = Assertion.RECORDED, title = "设备记录到${p.steps}步",
                     detail = if(p.provider=="STEP_DETECTOR") "手机硬件单步检测记录" else "硬件计步器在同一启动周期中的增量", evidence = listOf(evidence(o, if(p.provider=="STEP_DETECTOR") "单步检测事件" else "累计计步差分")), amount = p.steps) else null
@@ -205,7 +208,7 @@ class DayEngine(val config: EngineConfig = EngineConfig()) {
         }.sortedBy { it.startMs }
         val app = episodes.filter { it.kind == "APP" && it.assertion != Assertion.UNKNOWN && "CLOCK_CONFLICT" !in it.qualityFlags }
         val media = episodes.filter { it.kind == "MEDIA" && it.assertion != Assertion.UNKNOWN }
-        val raw = observations.flatMap { filterObservation(it, policy) }
+        val raw = selectStepSources(observations.flatMap { filterObservation(it, policy) },zone,now)
         val hc = raw.filter { it.kind == Kind.HEALTH_STEPS && it.startMs == w.start && it.endMs == w.end }.maxByOrNull { it.receivedMs }
         val step = raw.filter { it.kind == Kind.STEP_DELTA && it.startMs >= w.start && it.endMs <= w.end }
         val archiveSteps=retainedMetrics.firstOrNull { it.key=="steps" }

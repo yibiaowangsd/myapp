@@ -22,8 +22,9 @@ import androidx.health.connect.client.request.*
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.permission.HealthPermission
 import kotlin.reflect.KClass
+import com.personal.wo.health.HuaweiHealthController
 
-class PullCollectors(private val c:Context,private val repo:WoRepository) {
+class PullCollectors(private val c:Context,private val repo:WoRepository,private val huawei:HuaweiHealthController?=null) {
     private val pullGate=PullGate(android.os.SystemClock::elapsedRealtime)
     private val labels=mutableMapOf<String,String>()
     fun label(pkg:String):String = labels.getOrPut(pkg) { runCatching { c.packageManager.getApplicationLabel(c.packageManager.getApplicationInfo(pkg,0)).toString() }.getOrDefault(pkg) }.also { if(labels.size>200) labels.clear() }
@@ -43,6 +44,10 @@ class PullCollectors(private val c:Context,private val repo:WoRepository) {
                 if(e is SecurityException)repo.state(repo.source(source).copy(authorization="DENIED",runtime="STOPPED",detail="P001:权限已撤回"))
                 else { repo.state(repo.source(source).copy(runtime="ERROR",detail="S001:来源暂时不可用（${e.javaClass.simpleName}）"));repo.log("SOURCE_${source.name}_FAILED") }
             }
+        }
+        if(Source.HEALTH in repo.cachedPolicy.enabledSources) {
+            recoverableTask { huawei?.sync(ZoneId.of(repo.cachedPolicy.archiveZone),repo.cachedPolicy.generation,foreground) }
+                .onFailure { repo.log("HUAWEI_HEALTH_SYNC_FAILED") }
         }
         repo.heartbeat()
     }
@@ -140,7 +145,7 @@ class PullCollectors(private val c:Context,private val repo:WoRepository) {
             repeat(7) { i -> val w=window(today.minusDays(i.toLong()),zone)
                 val aggregate=client.aggregate(AggregateRequest(setOf(StepsRecord.COUNT_TOTAL),TimeRangeFilter.between(Instant.ofEpochMilli(w.start),Instant.ofEpochMilli(minOf(w.end,now)))))
                 val count=aggregate[StepsRecord.COUNT_TOTAL]
-                if(count!=null) { val key=repo.vault.sourceKey("health.steps",w.start,zone.id); batch+=Observation(stableId(Source.HEALTH,key),Source.HEALTH,key,Kind.HEALTH_STEPS,w.start,w.end,now,payload=Payload(steps=count,label="Health Connect聚合")) }
+                if(count!=null) { val key=repo.vault.sourceKey("health.steps",w.start,zone.id); batch+=Observation(stableId(Source.HEALTH,key),Source.HEALTH,key,Kind.HEALTH_STEPS,w.start,w.end,now,payload=Payload(steps=count,label="Health Connect聚合",provider=HEALTH_CONNECT)) }
             }
         }
         var complete=true
@@ -149,7 +154,7 @@ class PullCollectors(private val c:Context,private val repo:WoRepository) {
             do {
                 val result=client.readRecords(ReadRecordsRequest(SleepSessionRecord::class,TimeRangeFilter.between(Instant.ofEpochMilli(from),Instant.ofEpochMilli(until)),pageSize=200,pageToken=token))
                 result.records.forEach { record -> val key=repo.vault.sourceKey("health.sleep",record.metadata.id)
-                    batch+=Observation(stableId(Source.HEALTH,key),Source.HEALTH,key,Kind.SLEEP,record.startTime.toEpochMilli(),record.endTime.toEpochMilli(),now,payload=Payload(label=record.metadata.dataOrigin.packageName)) }
+                    batch+=Observation(stableId(Source.HEALTH,key),Source.HEALTH,key,Kind.SLEEP,record.startTime.toEpochMilli(),record.endTime.toEpochMilli(),now,payload=Payload(label=record.metadata.dataOrigin.packageName,provider=HEALTH_CONNECT)) }
                 token=result.pageToken
             } while(token!=null && batch.size<450)
             if(token!=null)complete=false
@@ -157,10 +162,10 @@ class PullCollectors(private val c:Context,private val repo:WoRepository) {
         if(HealthPermission.getReadPermission(ExerciseSessionRecord::class) in permissions && batch.size<450) {
             val result=client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class,TimeRangeFilter.between(Instant.ofEpochMilli(from),Instant.ofEpochMilli(until)),pageSize=200))
             result.records.forEach { record -> val key=repo.vault.sourceKey("health.exercise",record.metadata.id)
-                batch+=Observation(stableId(Source.HEALTH,key),Source.HEALTH,key,Kind.EXERCISE,record.startTime.toEpochMilli(),record.endTime.toEpochMilli(),now,payload=Payload(label=record.title ?: record.metadata.dataOrigin.packageName)) }
+                batch+=Observation(stableId(Source.HEALTH,key),Source.HEALTH,key,Kind.EXERCISE,record.startTime.toEpochMilli(),record.endTime.toEpochMilli(),now,payload=Payload(label=record.title ?: record.metadata.dataOrigin.packageName,provider=HEALTH_CONNECT)) }
             if(result.pageToken!=null)complete=false
         }
         // Reconcile bounded snapshots including deleted provider records. Never replace a truncated snapshot.
-        repo.ingest(batch.take(512),p.generation,Source.HEALTH,now.toString(),replaceSpan=if(complete&&batch.size<=512) Span(from,until) else null)
+        repo.ingest(batch.take(512),p.generation,Source.HEALTH,now.toString(),replaceSpan=if(complete&&batch.size<=512) Span(from,until) else null,replaceHealthProvider=HEALTH_CONNECT)
     }
 }
