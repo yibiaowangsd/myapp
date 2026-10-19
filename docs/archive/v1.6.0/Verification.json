@@ -1,0 +1,188 @@
+{
+  "date": "2026-10-16T09:39:55.581204+08:00",
+  "version": "1.6.0",
+  "versionCode": 10,
+  "package": "com.personal.wo",
+  "databaseVersion": 1,
+  "recordType": "Existing results and completed build; no tests rerun for repository sync",
+  "build": "PASS",
+  "buildExitCode": 0,
+  "buildVariant": "personalEnhancedRelease",
+  "buildCommand": "./gradlew :app:assemblePersonalEnhancedRelease -x :app:lintVitalPersonalEnhancedRelease --max-workers=1 --no-parallel --console=plain",
+  "buildLog": "reports/v1.6.0/build-personalEnhancedRelease.txt",
+  "tests": [
+    {
+      "name": "com.personal.wo.CollectionEfficiencyTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:15.960Z"
+    },
+    {
+      "name": "com.personal.wo.DatabaseOpenCallbackTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:16.027Z"
+    },
+    {
+      "name": "com.personal.wo.DayDrumUiTest",
+      "tests": "17",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:16.376Z"
+    },
+    {
+      "name": "com.personal.wo.DirectPermissionPlanTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:29.798Z"
+    },
+    {
+      "name": "com.personal.wo.StartupRecoveryTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:29.800Z"
+    },
+    {
+      "name": "com.personal.wo.StepSensorsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:29.806Z"
+    },
+    {
+      "name": "com.personal.wo.UiFlowTest",
+      "tests": "18",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:29.835Z"
+    },
+    {
+      "name": "com.personal.wo.core.DailyRecapTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:14.023Z"
+    },
+    {
+      "name": "com.personal.wo.core.DayChaptersTest",
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:14.083Z"
+    },
+    {
+      "name": "com.personal.wo.core.DayMomentsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:14.108Z"
+    },
+    {
+      "name": "com.personal.wo.core.DayPresentationTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:14.112Z"
+    },
+    {
+      "name": "com.personal.wo.core.EngineTest",
+      "tests": "33",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:14.128Z"
+    },
+    {
+      "name": "com.personal.wo.core.StepReadingsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:14.173Z"
+    },
+    {
+      "name": "com.personal.wo.core.StreamingCryptoTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-15T19:51:14.175Z"
+    }
+  ],
+  "testCount": 128,
+  "failures": 0,
+  "errors": 0,
+  "skippedTests": 0,
+  "testReports": "reports/v1.6.0/",
+  "testsRerunForRepositorySync": false,
+  "lint": "NOT_RERUN; final enhanced Release lintVital task excluded as requested",
+  "apks": [
+    {
+      "apk": "Wo_Android_v1.6.0_Enhanced.apk",
+      "sizeBytes": 9548237,
+      "delivery": "Enhanced only; separately delivered",
+      "signing": "Built using existing personal signing configuration",
+      "additionalStaticChecks": "NOT_RUN_AFTER_FINAL_BUILD"
+    }
+  ],
+  "offlineRelease": "NOT_DELIVERED_FOR_1.6.0",
+  "uiRendering": "Previously generated Robolectric API 35 native graphics; production Compose; Android View.draw/Skia; synthetic labeled fixtures",
+  "uiImages": [
+    "01-permissions.png",
+    "02-photo-timeline.png",
+    "03-today.png",
+    "04-visuals.png",
+    "05-empty.png",
+    "06-large-text.png",
+    "07-dark.png",
+    "08-timeline.png",
+    "09-history.png",
+    "10-me.png",
+    "11-step-retry.png",
+    "12-timeline-home.png",
+    "13-connections.png",
+    "14-app-connection.png",
+    "15-huawei-status.png",
+    "16-background-help.png",
+    "17-connections-large-dark.png",
+    "18-day-chart.png",
+    "19-hour-detail.png",
+    "20-recap-large-dark.png",
+    "21-chart-large-dark.png",
+    "22-chapter-home.png",
+    "23-chapter-middle.png",
+    "24-both-sides-visible.png",
+    "25-chapter-empty.png",
+    "26-chapter-large-dark.png",
+    "27-separate-statistics.png",
+    "28-chapter-depth-left.png",
+    "29-chapter-landscape.png",
+    "30-chapter-calendar.png",
+    "31-chapter-filter.png",
+    "32-chapter-details.png",
+    "33-chapter-depth-right.png",
+    "34-small-fragments.png",
+    "35-event-daylight.png",
+    "36-event-night.png"
+  ],
+  "depthFrames": 37,
+  "androidInstrumentation": "NOT_RUN_ON_DEVICE; four existing tests were compiled in earlier releases",
+  "huaweiDeviceVerification": "NOT_DEVICE_TESTED",
+  "previousStartupFix": "DatabaseOpenCallback query with consumed and closed cursor retained",
+  "previousReport": "archive/v1.5.0/Verification.md"
+}
