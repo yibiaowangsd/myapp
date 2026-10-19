@@ -23,12 +23,17 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.permission.HealthPermission
 import kotlin.reflect.KClass
 import com.personal.wo.health.HuaweiHealthController
+import com.personal.wo.ui.ThumbnailCache
 
 class PullCollectors(private val c:Context,private val repo:WoRepository,private val huawei:HuaweiHealthController?=null) {
     private val pullGate=PullGate(android.os.SystemClock::elapsedRealtime)
+    private val probeGate=ProbeGate(android.os.SystemClock::elapsedRealtime)
     private val labels=mutableMapOf<String,String>()
     fun label(pkg:String):String = labels.getOrPut(pkg) { runCatching { c.packageManager.getApplicationLabel(c.packageManager.getApplicationInfo(pkg,0)).toString() }.getOrDefault(pkg) }.also { if(labels.size>200) labels.clear() }
-    suspend fun probe() { repo.probed(Capabilities.probe(c,repo.cachedPolicy)) }
+    suspend fun probe(force:Boolean=false) {
+        val policy=repo.cachedPolicy
+        probeGate.run(force,policy.generation) { repo.probed(Capabilities.probe(c,policy),policy.generation) }
+    }
     suspend fun pull(foreground:Boolean=false,force:Boolean=false) {
         if(!repo.cachedPolicy.requested||repo.cachedPolicy.paused)return
         if(!c.getSystemService(UserManager::class.java).isUserUnlocked)return
@@ -40,13 +45,20 @@ class PullCollectors(private val c:Context,private val repo:WoRepository,private
         actions.forEach { (source,action) ->
             if(source !in repo.cachedPolicy.enabledSources)return@forEach
             if(!repo.source(source).supported)return@forEach
-            recoverableTask(action).onFailure { e ->
-                if(e is SecurityException)repo.state(repo.source(source).copy(authorization="DENIED",runtime="STOPPED",detail="P001:权限已撤回"))
-                else { repo.state(repo.source(source).copy(runtime="ERROR",detail="S001:来源暂时不可用（${e.javaClass.simpleName}）"));repo.log("SOURCE_${source.name}_FAILED") }
+            val completed=withTimeoutOrNull(4_000) {
+                recoverableTask(action).onFailure { e ->
+                    if(e is SecurityException)repo.state(repo.source(source).copy(authorization="DENIED",runtime="STOPPED",detail="P001:权限已撤回"))
+                    else { repo.state(repo.source(source).copy(runtime="ERROR",detail="S001:来源暂时不可用（${e.javaClass.simpleName}）"));repo.log("SOURCE_${source.name}_FAILED") }
+                }
+                true
+            }
+            if(completed==null) {
+                repo.state(repo.source(source).copy(runtime="DEGRADED",detail="来源响应较慢，下次继续同步；其他来源继续使用"))
+                repo.log("SOURCE_${source.name}_TIMEOUT")
             }
         }
         if(Source.HEALTH in repo.cachedPolicy.enabledSources) {
-            recoverableTask { huawei?.sync(ZoneId.of(repo.cachedPolicy.archiveZone),repo.cachedPolicy.generation,foreground) }
+            recoverableTask { withTimeoutOrNull(4_000) { huawei?.sync(ZoneId.of(repo.cachedPolicy.archiveZone),repo.cachedPolicy.generation,foreground) } }
                 .onFailure { repo.log("HUAWEI_HEALTH_SYNC_FAILED") }
         }
         repo.heartbeat()
@@ -107,6 +119,7 @@ class PullCollectors(private val c:Context,private val repo:WoRepository,private
                     batch+=Observation(stableId(Source.PHOTO,key),Source.PHOTO,key,Kind.PHOTO,t,receivedMs=now,payload=Payload(uri=ContentUris.withAppendedId(uri,id).toString(),captured=captured,category=if(q.long("media_type")==3L) "VIDEO" else "IMAGE"))
                 }
             }
+            ThumbnailCache.invalidate(batch.map { it.payload.uri })
             repo.ingest(batch,p.generation,Source.PHOTO,"$mod:$lastId")
             if(batch.size<200)return
         }

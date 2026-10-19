@@ -81,6 +81,15 @@ data class AchievementSnapshot(
     val newIds:Set<String> = emptySet(),val fromDate:String="",val toDate:String="",val demo:Boolean=false
 ) { val unlocked get()=items.filter{it.unlocked} }
 
+@Serializable data class AchievementPlace(val lat:Double,val lon:Double)
+/** Minimal per-day evidence, retained inside SQLCipher; cross-day deduplication stays in the accumulator. */
+@Serializable data class AchievementDayContribution(
+    val date:String,val zone:String,val recorded:Boolean,val steps:Long?,
+    val exerciseMs:Long,val readingMs:Long,val exerciseObserved:Boolean,val readingObserved:Boolean,
+    val photoIds:List<String>,val favoriteIds:List<String>,val favoriteObserved:Boolean,
+    val places:List<AchievementPlace>
+)
+
 /** Read-only streaming projection over chronological archive days; no raw collection or clock timer. */
 class AchievementAccumulator(private val settings:AchievementSettings,private val policy:Policy) {
     private val goals=achievementCatalog+settings.checked().customGoals
@@ -113,11 +122,8 @@ class AchievementAccumulator(private val settings:AchievementSettings,private va
         }
         return spans
     }
-    fun accept(day:DayView) {
+    fun contribution(day:DayView):AchievementDayContribution {
         require(day.zoneId==policy.archiveZone){"成就归档时区不一致"}
-        val date=LocalDate.parse(day.dayDate)
-        require(previousDate==null||date>previousDate){"成就日输入需按日期去重后升序排列"}
-        previousDate=date
         val cutoff=minOf(day.asOfMs,day.windowEndMs)
         val valid=day.episodes.distinctBy{it.id}.filter { e ->
             e.assertion !in setOf(Assertion.PLANNED,Assertion.UNKNOWN)&&e.evidence.isNotEmpty()&&
@@ -134,7 +140,6 @@ class AchievementAccumulator(private val settings:AchievementSettings,private va
                 x.startMs<cutoff&&(x.endMs?:Long.MAX_VALUE)>day.windowStartMs
         }
         val steps=day.metrics.firstOrNull{it.key=="steps"}?.value?.takeIf{it>=0&&!stepExcluded}
-        if(steps!=null){observed+=AchievementMetric.STEPS;values[AchievementMetric.STEPS]=values.getValue(AchievementMetric.STEPS)+steps}
         val qualified=valid.filter { e ->
             when(e.kind){
                 "PHOTO"->e.photoUris.any{it.isNotBlank()}
@@ -143,32 +148,46 @@ class AchievementAccumulator(private val settings:AchievementSettings,private va
                 else->false
             }
         }
-        if(qualified.isNotEmpty()||(steps?:0)>0){
+        val exercise=valid.filter{it.kind=="EXERCISE"&&it.assertion in setOf(Assertion.RECORDED,Assertion.CONFIRMED)&&it.evidence.any{v->v.source==Source.HEALTH}}
+        val apps=valid.filter{it.kind=="APP"&&it.assertion in setOf(Assertion.RECORDED,Assertion.CONFIRMED)&&it.evidence.any{v->v.source==Source.USAGE}}
+        return AchievementDayContribution(day.dayDate,day.zoneId,qualified.isNotEmpty()||(steps?:0)>0,steps,
+            union(exercise.flatMap{spans(it,day)}).sumOf{it.duration},
+            union(apps.filter{it.packageName in settings.readingPackages}.flatMap{spans(it,day)}).sumOf{it.duration},
+            exercise.isNotEmpty(),apps.isNotEmpty(),
+            valid.filter{it.kind=="PHOTO"&&it.assertion in setOf(Assertion.RECORDED,Assertion.CONFIRMED)&&it.evidence.any{v->v.source==Source.PHOTO}}
+                .flatMap{it.photoUris}.filter{it.isNotBlank()}.distinct(),
+            valid.filter{it.isFavorite}.map{it.id},valid.isNotEmpty(),
+            valid.filter { it.kind=="STAY"&&it.assertion==Assertion.CONFIRMED&&it.evidence.any{v->v.source==Source.LOCATION}&&
+                it.lat?.let{lat->lat.isFinite()&&lat in -90.0..90.0}==true&&it.lon?.let{lon->lon.isFinite()&&lon in -180.0..180.0}==true&&spans(it,day).sumOf{s->s.duration}>=600_000L
+            }.map { AchievementPlace(it.lat!!,it.lon!!) })
+    }
+    fun accept(day:DayView)=accept(contribution(day))
+    fun accept(day:AchievementDayContribution) {
+        require(day.zone==policy.archiveZone){"成就归档时区不一致"}
+        val date=LocalDate.parse(day.date)
+        require(previousDate==null||date>previousDate){"成就日输入需按日期去重后升序排列"}
+        previousDate=date
+        day.steps?.let { steps->observed+=AchievementMetric.STEPS;values[AchievementMetric.STEPS]=values.getValue(AchievementMetric.STEPS)+steps }
+        if(day.recorded){
             values[AchievementMetric.DAYS]=values.getValue(AchievementMetric.DAYS)+1
             observed+=AchievementMetric.DAYS;observed+=AchievementMetric.STREAK
             streak=if(previousRecorded?.plusDays(1)==date)streak+1 else 1
             previousRecorded=date;values[AchievementMetric.STREAK]=maxOf(values.getValue(AchievementMetric.STREAK),streak)
         }
-        val exercise=valid.filter{it.kind=="EXERCISE"&&it.assertion in setOf(Assertion.RECORDED,Assertion.CONFIRMED)&&it.evidence.any{v->v.source==Source.HEALTH}}
-        if(exercise.isNotEmpty())observed+=AchievementMetric.EXERCISE
-        exerciseMs+=union(exercise.flatMap{spans(it,day)}).sumOf{it.duration}
+        if(day.exerciseObserved)observed+=AchievementMetric.EXERCISE
+        exerciseMs+=day.exerciseMs
         values[AchievementMetric.EXERCISE]=exerciseMs/60_000L
-        val apps=valid.filter{it.kind=="APP"&&it.assertion in setOf(Assertion.RECORDED,Assertion.CONFIRMED)&&it.evidence.any{v->v.source==Source.USAGE}}
-        if(apps.isNotEmpty())observed+=AchievementMetric.READING
-        readingMs+=union(apps.filter{it.packageName in settings.readingPackages}.flatMap{spans(it,day)}).sumOf{it.duration}
+        if(day.readingObserved)observed+=AchievementMetric.READING
+        readingMs+=day.readingMs
         values[AchievementMetric.READING]=readingMs/60_000L
-        valid.filter{it.kind=="PHOTO"&&it.assertion in setOf(Assertion.RECORDED,Assertion.CONFIRMED)}.forEach { e ->
-            if(e.evidence.any{it.source==Source.PHOTO})photos.addAll(e.photoUris.filter{it.isNotBlank()})
-        }
+        photos.addAll(day.photoIds)
         if(photos.isNotEmpty())observed+=AchievementMetric.PHOTOS
         values[AchievementMetric.PHOTOS]=photos.size.toLong()
-        valid.filter{it.isFavorite}.forEach{favorites+=it.id}
-        if(valid.isNotEmpty())observed+=AchievementMetric.FAVORITES
+        favorites.addAll(day.favoriteIds)
+        if(day.favoriteObserved)observed+=AchievementMetric.FAVORITES
         values[AchievementMetric.FAVORITES]=favorites.size.toLong()
-        valid.filter { it.kind=="STAY"&&it.assertion==Assertion.CONFIRMED&&it.evidence.any{v->v.source==Source.LOCATION}&&
-            it.lat?.let{lat->lat.isFinite()&&lat in -90.0..90.0}==true&&it.lon?.let{lon->lon.isFinite()&&lon in -180.0..180.0}==true&&spans(it,day).sumOf{s->s.duration}>=600_000L
-        }.forEach { e ->
-            val point=e.lat!! to e.lon!!
+        day.places.forEach { e ->
+            val point=e.lat to e.lon
             if(places.none{distance(it,point)<300.0})places+=point
         }
         if(places.isNotEmpty())observed+=AchievementMetric.PLACES

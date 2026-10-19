@@ -16,9 +16,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.personal.wo.MainActivity
 import com.personal.wo.core.*
 import java.time.*
@@ -26,13 +29,13 @@ import java.time.format.DateTimeFormatter
 
 @Composable fun WoAppUi(vm:WoViewModel,authorize:(Source)->Unit,background:()->Unit,export:(String)->Unit,restoreUri:Uri?,clearUri:()->Unit,lock:(Boolean)->Unit) {
     val context=LocalContext.current
-    val s by vm.state.collectAsState();var tab by key("main-tab-v170") { rememberSaveable { mutableIntStateOf(0) } };var page by rememberSaveable { mutableStateOf("") };var parent by rememberSaveable { mutableStateOf("") }
+    val s by vm.state.collectAsStateWithLifecycle();var tab by key("main-tab-v170") { rememberSaveable { mutableIntStateOf(0) } };var page by rememberSaveable { mutableStateOf("") };var parent by rememberSaveable { mutableStateOf("") }
     var dayParent by rememberSaveable { mutableStateOf("") }
     var setupParent by rememberSaveable { mutableStateOf("") }
     var chapterId by rememberSaveable { mutableStateOf("") }
     val immersive=page.isBlank()&&tab==0
     val achievements:AchievementViewModel=viewModel()
-    val awards by achievements.state.collectAsState()
+    val awards by achievements.state.collectAsStateWithLifecycle()
     val achievementsVisible=page.isBlank()&&tab==1
     LaunchedEffect(achievementsVisible,s.loaded,s.demo,s.day?.dayDate,s.day?.revision,s.policy.generation) {
         achievements.sync(s,achievementsVisible)
@@ -47,7 +50,7 @@ import java.time.format.DateTimeFormatter
     }
     BackHandler(page.isBlank()&&tab!=0){tab=0}
     BackHandler(page.isNotBlank()){back()}
-    Scaffold(containerColor=MaterialTheme.colorScheme.background,snackbarHost={SnackbarHost(snackbar)},bottomBar={ if(page.isBlank()) AppNavigation(tab) { i -> tab=i } }) { padding ->
+    Scaffold(modifier=Modifier.semantics { testTagsAsResourceId=true },containerColor=MaterialTheme.colorScheme.background,snackbarHost={SnackbarHost(snackbar)},bottomBar={ if(page.isBlank()) AppNavigation(tab) { i -> tab=i } }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding),contentAlignment=Alignment.TopCenter) {
             Column(Modifier.widthIn(max=680.dp).fillMaxSize().padding(horizontal=if(immersive)0.dp else 16.dp)) {
                 if(!immersive)Row(Modifier.fillMaxWidth().heightIn(min=56.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -64,7 +67,10 @@ import java.time.format.DateTimeFormatter
                     "search"->SearchPage(s,vm,::open)
                     "episode"->EpisodePage(s,vm,::back)
                     "day"->TimelinePage(s,{vm.date(it)},::open)
-                    "chapter"->s.day?.let { day -> ChapterDetailsPage(day,dayChapters(day,s.homeAppMinMinutes).firstOrNull{it.id==chapterId},s.homeAppMinMinutes,::open) }
+                    "chapter"->s.day?.let { day ->
+                        val projection=resolvedHomeProjection(s,day)
+                        if(projection==null)CircularProgressIndicator() else ChapterDetailsPage(day,projection.chapters.firstOrNull{it.id==chapterId},s.homeAppMinMinutes,::open)
+                    }
                     "summary"->DayStatisticsPage(s,::all,{val step=s.sources.firstOrNull{it.source==Source.STEPS};if(sourceReady(step))vm.reconnectSteps() else {vm.source(Source.STEPS,true);authorize(Source.STEPS)}},::open)
                     else->when(tab){
                         0->DayDrumHome(s,{chapterId=it.id;page="chapter"},{page="summary"},{vm.refresh()},{setup()},{vm.demo(it)},vm::date,vm::homeAppMinutes,onAll=::all)

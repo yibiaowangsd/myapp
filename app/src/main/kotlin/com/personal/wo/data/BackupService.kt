@@ -161,6 +161,8 @@ class BackupService(private val context:Context,private val repo:WoRepository) {
             repo.db.withTransaction {
                 val target=repo.db.dao()
                 listOf("event_search","episode_evidence","episode_relation","annotation","observation","episode","place","media_ref","daily_metric","daily_summary","source_coverage","dirty_window","exclusion","source_state").forEach { repo.db.openHelper.writableDatabase.execSQL("DELETE FROM $it") }
+                repo.db.dao().deleteMetaRange("achievement.day.v1:","achievement.day.v1:\uffff")
+                repo.db.dao().deleteMetaRange("day.snapshot.v1:","day.snapshot.v1:\uffff")
                 var offset=0
                 while(true) { val rows=dao.allObservations(200,offset);if(rows.isEmpty())break;target.putObservations(rows);offset+=rows.size }
                 offset=0

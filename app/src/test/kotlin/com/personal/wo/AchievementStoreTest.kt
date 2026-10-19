@@ -16,18 +16,22 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executor
 
 /** Tests real Room queries and transactions; not a substitute for SQLCipher device tests. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[35],application=Application::class)
 class AchievementStoreTest {
     private lateinit var db:WoDatabase
+    private val queries=CopyOnWriteArrayList<String>()
     private val today=LocalDate.of(2026,10,16)
     private val policy=Policy(archiveZone="Asia/Shanghai")
     private val now=window(today,ZoneId.of(policy.archiveZone)).start+12*3_600_000L
     private fun store()=AchievementStore(db,policy,730){now}
     @Before fun open() {
-        db=Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),WoDatabase::class.java).allowMainThreadQueries().build()
+        db=Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),WoDatabase::class.java).allowMainThreadQueries()
+            .setQueryCallback({sql,_->queries.add(sql)},Executor{it.run()}).build()
     }
     @After fun close(){db.close()}
     private suspend fun insert(date:LocalDate,steps:Long=1000,zone:String=policy.archiveZone) {
@@ -97,5 +101,28 @@ class AchievementStoreTest {
         assertTrue(result.settings.customGoals.isEmpty())
         assertNotNull(db.dao().summary(today.toString(),policy.archiveZone))
         assertEquals(1000L,result.value(AchievementMetric.STEPS))
+    }
+    @Test fun unchangedArchivesUseOnlyHeadersAndCachedContributions()=runBlocking {
+        repeat(101){insert(today.minusDays(it.toLong()))}
+        val first=store().load();queries.clear()
+        assertEquals(first,store().load())
+        assertTrue(queries.none{it.contains("SELECT * FROM daily_summary",true)})
+    }
+    @Test fun onlyTheChangedArchiveDayIsDecodedAndItsCorrectedTotalIsUsed()=runBlocking {
+        repeat(10){insert(today.minusDays(it.toLong()))};store().load()
+        val row=db.dao().summary(today.toString(),policy.archiveZone)!!
+        val day=WoJson.decodeFromString<DayView>(row.json)
+        val corrected=day.copy(revision=2,metrics=listOf(Metric("steps",500,"步","修正后的步数")))
+        db.dao().putSummary(row.copy(revision=2,json=WoJson.encodeToString(corrected)));queries.clear()
+        assertEquals(9_500L,store().load().value(AchievementMetric.STEPS))
+        assertEquals(1,queries.count{it.contains("SELECT * FROM daily_summary",true)})
+    }
+    @Test fun changedExclusionsInvalidateDerivedDayEvidence()=runBlocking {
+        insert(today);store().load()
+        val span=window(today,ZoneId.of(policy.archiveZone))
+        val excluded=policy.copy(generation=1,exclusions=listOf(Exclusion("pause",span.start,span.end)))
+        val snapshot=AchievementStore(db,excluded,730){now}.load()
+        assertEquals(0L,snapshot.value(AchievementMetric.STEPS))
+        assertFalse(snapshot.items.first{it.goal.id=="steps-1"}.hasEvidence)
     }
 }

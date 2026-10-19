@@ -64,8 +64,8 @@ class Graph(val context: Context) {
     val config = context.assets.open("default_config.json").bufferedReader().use { WoJson.decodeFromString<EngineConfig>(it.readText()).checked() }
     val db: WoDatabase
     val repo: WoRepository
-    val collector: PullCollectors
-    val huawei: HuaweiHealthController
+    val huawei: HuaweiHealthController by lazy { HuaweiHealthFactory.create(context,repo) }
+    val collector: PullCollectors by lazy { PullCollectors(context,repo,huawei) }
     private data class Submission(val observation: Observation,val generation: Long)
     private val queue = Channel<Submission>(config.queueCapacity)
     private val dropped = AtomicLong(0)
@@ -73,8 +73,6 @@ class Graph(val context: Context) {
         System.loadLibrary("sqlcipher")
         db = Room.databaseBuilder(context,WoDatabase::class.java,"wo.db").openHelperFactory(SupportOpenHelperFactory(vault.password())).setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING).addCallback(DatabaseOpenCallback()).build()
         repo = WoRepository(db,vault,config,context)
-        huawei = HuaweiHealthFactory.create(context,repo)
-        collector = PullCollectors(context,repo,huawei)
         scope.launch {
             while(isActive) {
                 val first=queue.receive(); val batch=mutableListOf(first)

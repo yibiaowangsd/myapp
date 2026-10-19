@@ -35,7 +35,7 @@ class DayBuildWorker(c:Context,p:WorkerParameters):CoroutineWorker(c,p) {
         val r=applicationContext.wo().graph().repo
         if(!r.cachedPolicy.requested||r.cachedPolicy.paused)return Result.success()
         val dirty=r.db.dao().dirty();val today=LocalDate.now(ZoneId.of(r.cachedPolicy.archiveZone))
-        (r.dirtyDays()+today+today.minusDays(1)).sortedDescending().take(16).forEach { r.day(it) };r.clearDirty(dirty.map { it.id });Result.success()
+        (r.dirtyDays()+today+today.minusDays(1)).sortedDescending().take(16).forEach { r.currentDay(it) };r.clearDirty(dirty.map { it.id });Result.success()
     } catch(e:CancellationException) { throw e } catch(e:Exception) { if(runAttemptCount<3)Result.retry() else Result.failure() } }
 }
 class MaintenanceWorker(c:Context,p:WorkerParameters):CoroutineWorker(c,p) {

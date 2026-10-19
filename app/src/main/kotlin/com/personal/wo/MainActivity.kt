@@ -12,11 +12,13 @@ import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.personal.wo.collector.Capabilities
 import com.personal.wo.collector.DirectPermissionPlan
 import com.personal.wo.collector.OptionalHealthPermissionContract
@@ -66,7 +68,8 @@ class MainActivity:ComponentActivity() {
         }
         vm=created.getOrThrow()
         setContent {
-            val state by vm.state.collectAsState()
+            val state by vm.state.collectAsStateWithLifecycle()
+            ReportDrawnWhen { state.loaded&&state.startupError==null&&unlocked.value&&state.homeProjection!=null }
             LaunchedEffect(state.loaded,state.policy.lockUi,state.startupError) { if(state.loaded&&state.startupError==null) { if(state.policy.lockUi&&stoppedAt==0L) { unlocked.value=false;authenticate() } else if(!state.policy.lockUi)unlocked.value=true } }
             LaunchedEffect(state.loaded,state.sources.size,unlocked.value) {
                 if(state.loaded&&state.startupError==null&&unlocked.value&&state.sources.size==Source.entries.size&&

@@ -24,7 +24,7 @@ data class WoUiState(
     val selectedDate:String=LocalDate.now().toString(),val demo:Boolean=false,val databaseBytes:Long=0,
     val diagnostics:List<String> = emptyList(),val positions:List<Observation> = emptyList(),
     val apps:List<ConnectedApp> = emptyList(),val appsLoaded:Boolean=false,
-    val homeAppMinMinutes:Int=10,
+    val homeAppMinMinutes:Int=10,val homeProjection:HomeProjection?=null,
     val achievements:AchievementSnapshot?=null,val achievementsLoading:Boolean=false,val achievementError:String?=null,
     val huawei:HuaweiState=HuaweiState()
 )
@@ -45,6 +45,9 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     @Volatile private var workScheduled=false
     @Volatile private var syncGeneration=0L
     private val reloadMutex=Mutex()
+    private val projections=HomeProjectionCache()
+    private var projectionJob:Job?=null
+    private var demoJob:Job?=null
     @Volatile private var historyVisible=false
     private var appsJob:Job?=null
     private var searchText="";private var searchAll=false
@@ -55,13 +58,14 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         initializationJob=viewModelScope.launch(Dispatchers.IO) {
             recoverableTask {
                 val g=app.graph()
-                huaweiStateJob?.cancel()
-                huaweiStateJob=viewModelScope.launch { g.huawei.state.collect { state->mutable.update { it.copy(huawei=state) } } }
                 val zone=ZoneId.of(g.repo.cachedPolicy.archiveZone);mutable.update { it.copy(policy=g.repo.cachedPolicy,selectedDate=LocalDate.now(zone).toString()) }
                 val date=LocalDate.parse(mutable.value.selectedDate)
                 val first=g.repo.cachedDay(date) ?: g.repo.currentDay(date)
-                mutable.update { it.copy(day=first,policy=g.repo.cachedPolicy,loaded=true,startupError=null) }
+                val projection=projections.project(first,mutable.value.homeAppMinMinutes)
+                mutable.update { it.copy(day=first,homeProjection=projection,policy=g.repo.cachedPolicy,loaded=true,startupError=null) }
                 initialReady.complete(Unit)
+                huaweiStateJob?.cancel()
+                huaweiStateJob=viewModelScope.launch(Dispatchers.IO) { g.huawei.state.collect { state->mutable.update { it.copy(huawei=state) } } }
                 g.repo.changes.drop(1).debounce(700).collect { if(visible&&!synchronizing)reload() }
             }.onFailure { failure("载入首页",it);initialReady.complete(Unit) }
         }
@@ -82,7 +86,10 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         val g=app.graph();val date=LocalDate.parse(mutable.value.selectedDate)
         val day=g.repo.currentDay(date)
         val sources=g.repo.sources()
-        mutable.update { if(it.demo||it.selectedDate!=date.toString())it else it.copy(day=day,loaded=true,startupError=null,policy=g.repo.cachedPolicy,sources=sources) }
+        val minimum=mutable.value.homeAppMinMinutes
+        val projection=projections.project(day,minimum)
+        mutable.update { if(it.demo||it.selectedDate!=date.toString())it else it.copy(day=day,
+            homeProjection=projection.takeIf { _->it.homeAppMinMinutes==minimum },loaded=true,startupError=null,policy=g.repo.cachedPolicy,sources=sources) }
         val history=if(historyVisible)g.repo.history() else mutable.value.history
         val positions=if(positionsVisible)g.db.dao().positions(day.windowStartMs,day.windowEndMs).map { WoJson.decodeFromString<Observation>(it.json) }.flatMap { filterObservation(it,g.repo.cachedPolicy) } else emptyList()
         val diagnostics=if(diagnosticsVisible)g.db.dao().operations().map { o -> "${Instant.ofEpochMilli(o.timeMs).atZone(ZoneId.of(g.repo.cachedPolicy.archiveZone)).toLocalTime().withNano(0)} · ${o.code}${if(o.count>0) " · ${o.count}" else ""}" } else mutable.value.diagnostics
@@ -109,7 +116,7 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
             try {
                 recoverableTask {
                     val g=app.graph()
-                    g.collector.probe()
+                    g.collector.probe(force)
                     if(g.repo.cachedPolicy.requested&&!g.repo.cachedPolicy.paused) {
                         if(g.repo.cachedPolicy.lastAliveMs>0&&System.currentTimeMillis()-g.repo.cachedPolicy.lastAliveMs>45*60_000)
                             g.repo.coverage(Source.NOTIFICATION,g.repo.cachedPolicy.lastAliveMs,System.currentTimeMillis(),false,"监听状态可能中断；未收到不代表没有消息")
@@ -132,6 +139,7 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     fun foreground() { visible=true;synchronize(false) }
     fun background() { visible=false;syncGeneration++;synchronizing=false;mutable.update { it.copy(busy=false) };loadJob?.cancel();searchJob?.cancel();foregroundJob?.cancel() }
     fun date(date:LocalDate) {
+        demoJob?.cancel()
         val today=LocalDate.now(ZoneId.of(mutable.value.policy.archiveZone))
         val target=minOf(date,today)
         mutable.update { it.copy(selectedDate=target.toString(),demo=false) };refresh(false)
@@ -139,14 +147,20 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     fun homeAppMinutes(value:Int) {
         val checked=checkedHomeAppMinutes(value)
         uiPreferences.edit().putInt("home_app_minutes",checked).apply()
-        mutable.update { it.copy(homeAppMinMinutes=checked) }
+        mutable.update { it.copy(homeAppMinMinutes=checked,homeProjection=null) }
+        projectionJob?.cancel()
+        val day=mutable.value.day ?: return
+        projectionJob=viewModelScope.launch {
+            val projection=projections.project(day,checked)
+            mutable.update { if(it.day!=day||it.homeAppMinMinutes!=checked)it else it.copy(homeProjection=projection) }
+        }
     }
     fun message(value:String?) { mutable.update { it.copy(message=value) } }
     private fun action(block:suspend(Graph)->Unit) { viewModelScope.launch(Dispatchers.IO) {
         mutable.update { it.copy(busy=true) }
         try { recoverableTask { block(app.graph());reload() }.onFailure { if(it is LinkageError||app.currentGraph==null)failure("记录操作",it) else message(it.message ?: "操作未完成，请重试") } } finally { mutable.update { it.copy(busy=false) } }
     } }
-    fun recording(action:String) { mutable.update { it.copy(demo=false) };action { g ->
+    fun recording(action:String) { demoJob?.cancel();mutable.update { it.copy(demo=false) };action { g ->
         g.repo.command(action)
         if(action=="pause"||action=="stop") { app.stopService(Intent(app,RecordingService::class.java));WorkScheduling.pause(app);workScheduled=false }
         else { if(!WorkScheduling.schedule(app))message("系统后台调度暂不可用，打开应用时仍会同步");RecordingService.start(app);g.collector.probe();g.collector.pull(true) }
@@ -236,10 +250,15 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         message("记录已恢复。请重新确认来源授权，再开始记录；照片需要重新关联")
     }
     fun demo(on:Boolean) {
+        demoJob?.cancel()
         if(!on) { mutable.update { it.copy(demo=false) };refresh(false);return }
         val zone=mutable.value.policy.archiveZone
         val today=LocalDate.now(ZoneId.of(zone))
-        mutable.update { it.copy(demo=true,day=demoDay(today,zone),selectedDate=today.toString()) }
+        demoJob=viewModelScope.launch {
+            val day=withContext(Dispatchers.Default){demoDay(today,zone)}
+            val projection=projections.project(day,mutable.value.homeAppMinMinutes)
+            mutable.update { it.copy(demo=true,day=day,homeProjection=projection,selectedDate=today.toString()) }
+        }
     }
 
     override fun onCleared() { mutable.value.inspection?.directory?.deleteRecursively();super.onCleared() }

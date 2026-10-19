@@ -22,13 +22,31 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
     private val dao get() = db.dao()
     private val recentDays=RecentDayCache()
     private fun dayKey(date:LocalDate,zone:String)="day.snapshot.v1:$zone:$date"
-    private fun snapshotPolicy()="${cachedPolicy.generation}:${config.version}"
+    private fun snapshotPolicy()="v2:${cachedPolicy.generation}:${config.version}"
     private fun notifyChange() { changes.value += 1 }
+    private suspend fun invalidateDays(start:Long,end:Long,neighbors:Boolean=true) {
+        val zone=ZoneId.of(cachedPolicy.archiveZone)
+        val padding=if(neighbors)1L else 0L
+        val from=Instant.ofEpochMilli(start.coerceAtLeast(0)).atZone(zone).toLocalDate().minusDays(padding)
+        val to=Instant.ofEpochMilli(maxOf(start,end-1).coerceAtLeast(0)).atZone(zone).toLocalDate().plusDays(padding)
+        recentDays.invalidate(window(from,zone).start,window(to,zone).end)
+        dao.deleteMetaRange(dayKey(from,zone.id),dayKey(to,zone.id))
+    }
+    private suspend fun invalidateAllDays() {
+        recentDays.clear();dao.deleteMetaRange("day.snapshot.v1:","day.snapshot.v1:\uffff")
+        dao.deleteMetaRange("achievement.day.v1:","achievement.day.v1:\uffff")
+    }
+    private suspend fun sourceAvailabilityChanged(old:SourceState?,next:SourceState) {
+        val zone=ZoneId.of(cachedPolicy.archiveZone)
+        fun date(s:SourceState?)=s?.lastSuccessMs?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
+        if(date(old)!=date(next))listOfNotNull(old?.lastSuccessMs,next.lastSuccessMs).forEach { invalidateDays(it,it+1,false) }
+    }
     suspend fun initialize() { mutex.withLock {
         recentDays.clear()
-        cachedPolicy = dao.policy()?.let { WoJson.decodeFromString(it.json) } ?: Policy()
-        dao.putPolicy(PolicyRow(json = WoJson.encodeToString(cachedPolicy)))
-        dao.putMeta(MetaRow("engineVersion",config.version))
+        val saved=dao.policy()
+        cachedPolicy = saved?.let { WoJson.decodeFromString(it.json) } ?: Policy()
+        if(saved==null)dao.putPolicy(PolicyRow(json = WoJson.encodeToString(cachedPolicy)))
+        if(dao.meta("engineVersion")?.value!=config.version)dao.putMeta(MetaRow("engineVersion",config.version))
         mirror()
     } }
     private fun mirror() { context.getSharedPreferences("runtime",0).edit().putBoolean("requested",cachedPolicy.requested).putBoolean("paused",cachedPolicy.paused).apply() }
@@ -60,14 +78,16 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
     suspend fun source(source: Source): SourceState = sources().firstOrNull { it.source==source } ?: SourceState(source)
     suspend fun state(state: SourceState) = mutex.withLock {
         val row=SourceRow(state.source.name,WoJson.encodeToString(state))
-        if(dao.sources().none { it==row }) { dao.putSource(row);notifyChange() }
+        val old=sources().firstOrNull { it.source==state.source }
+        if(old!=state) { db.withTransaction { dao.putSource(row);sourceAvailabilityChanged(old,state) };notifyChange() }
     }
-    suspend fun probed(fresh:List<SourceState>) = mutex.withLock {
+    suspend fun probed(fresh:List<SourceState>,expectedGeneration:Long?=null) = mutex.withLock {
+        if(expectedGeneration!=null&&expectedGeneration!=cachedPolicy.generation)return@withLock
         val old=sources().associateBy { it.source }
         val changed=fresh.map { s -> old[s.source]?.let { s.copy(lastSuccessMs=it.lastSuccessMs,cursor=it.cursor,freshness=it.freshness) } ?: s }
             .filter { it!=old[it.source] }
         if(changed.isNotEmpty()) {
-            db.withTransaction { changed.forEach { dao.putSource(SourceRow(it.source.name,WoJson.encodeToString(it))) } }
+            db.withTransaction { changed.forEach { dao.putSource(SourceRow(it.source.name,WoJson.encodeToString(it)));sourceAvailabilityChanged(old[it.source],it) } }
             notifyChange()
         }
     }
@@ -88,33 +108,51 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
             val o=if(original.deviceId.isBlank())original.copy(deviceId=vault.deviceId) else original
             if(used>=softLimit&&o.kind==Kind.NOTICE)o.copy(payload=o.payload.copy(text="",label="通知元数据（存储预算降级）"),quality=o.quality+"STORAGE_DEGRADED") else o
         }.filterNot { used>=softLimit&&it.kind==Kind.PHOTO }.flatMap { filterObservation(it,p) }.filter { WoJson.encodeToString(it).toByteArray().size <= 8192 }
+        val incoming=filtered.distinctBy { it.id }
+        val prior=if(incoming.isEmpty())emptyMap() else dao.observationsByIds(incoming.map { it.id }).associateBy { it.id }
+        // Re-reading a system event is not new evidence. Preserve its original arrival
+        // time when its content is unchanged instead of rewriting every overlap pull.
+        val changed=incoming.filter { o -> prior[o.id]?.let { old ->
+            val previous=WoJson.decodeFromString<Observation>(old.json)
+            o.copy(receivedMs=previous.receivedMs)!=previous
+        } ?: true }
+        val replaced=if(replaceSpan!=null&&source!=null) {
+            if(source==Source.HEALTH) {
+                require(replaceHealthProvider in setOf(HUAWEI_HEALTH,HEALTH_CONNECT)) { "Health snapshots must identify their provider" }
+                dao.sourceObservations(source.name,replaceSpan.start,replaceSpan.end).filter { row ->
+                    val o=WoJson.decodeFromString<Observation>(row.json)
+                    healthProvider(o)==replaceHealthProvider&&(replaceKinds==null||o.kind in replaceKinds)
+                }
+            } else dao.sourceObservations(source.name,replaceSpan.start,replaceSpan.end)
+        } else emptyList()
+        val incomingIds=incoming.map { it.id }.toSet()
+        val removed=replaced.filter { it.id !in incomingIds }
         db.withTransaction {
             if(full)dao.putOperation(OperationRow("storage-budget",System.currentTimeMillis(),"D001_STORAGE_BUDGET",batch.size.toLong()))
             if(full&&resourceStop==null)savePolicy(p.copy(generation=p.generation+1,exclusions=p.exclusions+Exclusion("resource-${System.currentTimeMillis()}",System.currentTimeMillis(),reason="RESOURCE_LIMIT")))
-            if (replaceSpan != null && source != null) {
-                if(source==Source.HEALTH) {
-                    require(replaceHealthProvider in setOf(HUAWEI_HEALTH,HEALTH_CONNECT)) { "Health snapshots must identify their provider" }
-                    val old=dao.healthObservations().filter { row ->
-                        val observation=WoJson.decodeFromString<Observation>(row.json)
-                        row.startMs<replaceSpan.end&&row.endMs>replaceSpan.start&&healthProvider(observation)==replaceHealthProvider&&
-                            (replaceKinds==null||observation.kind in replaceKinds)
-                    }
-                    dao.deleteObservations(old.map { it.id })
-                } else dao.clearSourceRange(source.name,replaceSpan.start,replaceSpan.end)
-                // Empty snapshots and downward corrections must also invalidate day caches.
-                dao.putDirty(DirtyRow(UUID.randomUUID().toString(),replaceSpan.start,replaceSpan.end,p.generation,"RECONCILE"))
+            if(removed.isNotEmpty())dao.deleteObservations(removed.map { it.id })
+            if(changed.isNotEmpty())dao.putObservations(changed.map { ObservationRow(it.id,it.source.name,it.sourceKey,it.kind.name,it.startMs,it.endMs,it.receivedMs,WoJson.encodeToString(it)) })
+            changed.filter { it.kind==Kind.PHOTO }.forEach { dao.putMedia(MediaRow(it.id,it.sourceKey,it.payload.uri,it.startMs)) }
+            val spans=changed.map { Span(it.startMs,maxOf(it.endMs,it.startMs+1)) }+
+                (removed+changed.mapNotNull { prior[it.id] }).map { Span(it.startMs,maxOf(it.endMs,it.startMs+1)) }
+            if(spans.isNotEmpty()) {
+                val start=spans.minOf { it.start };val end=spans.maxOf { it.end }
+                dao.putDirty(DirtyRow(UUID.randomUUID().toString(),start,end,p.generation,if(replaceSpan!=null)"RECONCILE" else "INGEST"))
+                invalidateDays(start,end)
             }
-            dao.putObservations(filtered.map { ObservationRow(it.id,it.source.name,it.sourceKey,it.kind.name,it.startMs,it.endMs,it.receivedMs,WoJson.encodeToString(it)) })
-            filtered.filter { it.kind==Kind.PHOTO }.forEach { dao.putMedia(MediaRow(it.id,it.sourceKey,it.payload.uri,it.startMs)) }
-            if (filtered.isNotEmpty()) dao.putDirty(DirtyRow(UUID.randomUUID().toString(),filtered.minOf { it.startMs },filtered.maxOf { maxOf(it.endMs,it.startMs+1) },p.generation,"INGEST"))
             if (source!=null) {
                 val old = this@WoRepository.source(source); val now=System.currentTimeMillis()
-                dao.putSource(SourceRow(source.name,WoJson.encodeToString(old.copy(cursor=if(full)old.cursor else cursor ?: old.cursor,lastSuccessMs=if(full)old.lastSuccessMs else now,runtime=if(full) "DEGRADED" else "RUNNING",freshness=if(full) "STALE" else if(filtered.isEmpty()) "NO_DATA" else "FRESH",detail=if(full) "空间预算耗尽，原始记录已停止保存" else old.detail))))
-                if (coverageSpan!=null) dao.putCoverage(CoverageRow(stableId(source.name,coverageSpan.start,coverageSpan.end),source.name,coverageSpan.start,coverageSpan.end,WoJson.encodeToString(Coverage(source,coverageSpan.start,coverageSpan.end,!full,if(full) "空间预算耗尽，原始观察未保存" else "成功查询范围；不代表全部生活行为"))))
+                val next=old.copy(cursor=if(full)old.cursor else cursor ?: old.cursor,lastSuccessMs=if(full)old.lastSuccessMs else now,runtime=if(full) "DEGRADED" else "RUNNING",freshness=if(full) "STALE" else if(filtered.isEmpty()) "NO_DATA" else "FRESH",detail=if(full) "空间预算耗尽，原始记录已停止保存" else old.detail)
+                dao.putSource(SourceRow(source.name,WoJson.encodeToString(next)));sourceAvailabilityChanged(old,next)
+                if (coverageSpan!=null) {
+                    val row=CoverageRow(stableId(source.name,coverageSpan.start,coverageSpan.end),source.name,coverageSpan.start,coverageSpan.end,WoJson.encodeToString(Coverage(source,coverageSpan.start,coverageSpan.end,!full,if(full) "空间预算耗尽，原始观察未保存" else "成功查询范围；不代表全部生活行为")))
+                    if(dao.coverageById(row.id)!=row) { dao.putCoverage(row);invalidateDays(row.startMs,row.endMs,false) }
+                }
             }
             filtered.map { it.source }.distinct().filter { it!=source }.forEach { s ->
                 val old=this@WoRepository.source(s)
-                dao.putSource(SourceRow(s.name,WoJson.encodeToString(old.copy(lastSuccessMs=System.currentTimeMillis(),runtime="RUNNING",freshness="FRESH"))))
+                val next=old.copy(lastSuccessMs=System.currentTimeMillis(),runtime="RUNNING",freshness="FRESH")
+                dao.putSource(SourceRow(s.name,WoJson.encodeToString(next)));sourceAvailabilityChanged(old,next)
             }
         }
         notifyChange()
@@ -147,17 +185,20 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
                 dao.putDirty(DirtyRow(UUID.randomUUID().toString(),it.start,it.end,cachedPolicy.generation,"HUAWEI_REVOKE"))
             }
         }
-        recentDays.clear();notifyChange()
+        invalidateAllDays();notifyChange()
     }
     suspend fun coverage(source: Source,start: Long,end: Long,available: Boolean,detail: String) = mutex.withLock {
-        if(end>start) dao.putCoverage(CoverageRow(stableId(source,start,end,available),source.name,start,end,WoJson.encodeToString(Coverage(source,start,end,available,detail))))
+        if(end>start) {
+            val row=CoverageRow(stableId(source,start,end,available),source.name,start,end,WoJson.encodeToString(Coverage(source,start,end,available,detail)))
+            if(dao.coverageById(row.id)!=row)db.withTransaction { dao.putCoverage(row);invalidateDays(start,end,false) }
+        }
         notifyChange()
     }
     suspend fun places(): List<Place> = dao.places().map { WoJson.decodeFromString(it.json) }
     suspend fun namePlace(e: Episode,name: String) = mutex.withLock {
         require(e.lat!=null && e.lon!=null && name.isNotBlank())
         val place = Place(stableId("place",e.lat,e.lon),name.take(80),e.lat!!,e.lon!!)
-        dao.putPlace(PlaceRow(place.id,WoJson.encodeToString(place))); notifyChange()
+        db.withTransaction { dao.putPlace(PlaceRow(place.id,WoJson.encodeToString(place)));invalidateAllDays() }; notifyChange()
     }
     private suspend fun saveEpisode(e: Episode) {
         val text="${e.title} ${e.detail} ${e.packageName}".lowercase()
@@ -176,8 +217,16 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
     /** Repeated UI refreshes reuse the same revision until data/policy or the live clock changes. */
     suspend fun currentDay(date:LocalDate):DayView=mutex.withLock {
         val p=cachedPolicy;val now=System.currentTimeMillis();val zone=ZoneId.of(p.archiveZone)
-        recentDays.get(dayKey(date,zone.id),changes.value,p.generation,now,date==Instant.ofEpochMilli(now).atZone(zone).toLocalDate())
-            ?: buildDay(date,true)
+        val key=dayKey(date,zone.id)
+        val cached=recentDays.get(key,0,p.generation,now,false) ?: run {
+            val row=dao.summary(date.toString(),zone.id)
+            if(row!=null&&dao.meta(key)?.value==snapshotPolicy())WoJson.decodeFromString<DayView>(row.json) else null
+        }
+        if(cached!=null) {
+            val view=if(cached.asOfMs<cached.windowEndMs&&now-cached.asOfMs>=30_000)advanceDayClock(cached,p,now) else cached
+            if(view!=null) { recentDays.put(key,view,0,p.generation,now);return@withLock view }
+        }
+        buildDay(date,true)
     }
     suspend fun day(date:LocalDate,force:Boolean=true):DayView=mutex.withLock { buildDay(date,force) }
     private suspend fun buildDay(date: LocalDate,force: Boolean): DayView {
@@ -210,7 +259,7 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
             dao.putMeta(MetaRow(dayKey(date,zone.id),snapshotPolicy()))
             dao.putMetrics(view.metrics.map { MetricRow(date.toString(),zone.id,it.key,WoJson.encodeToString(it)) })
         }
-        recentDays.put(dayKey(date,zone.id),view,changes.value,p.generation,System.currentTimeMillis())
+        recentDays.put(dayKey(date,zone.id),view,0,p.generation,System.currentTimeMillis())
         return view
     }
     suspend fun history(): List<DayView> = dao.summaries(90).map { WoJson.decodeFromString(it.json) }
@@ -232,9 +281,10 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
                 val corrected=d.copy(episodes=episodes.sortedBy { it.startMs },revision=d.revision+1,sentences=listOf(Sentence("片段已按本人修正更新，可在时间轴查看依据。")))
                 dao.putSummary(row.copy(revision=corrected.revision,json=WoJson.encodeToString(corrected)))
             }
+            invalidateDays(minOf(s,current.startMs),maxOf(t,current.endMs)+1)
         }; notifyChange(); a.id
     }
-    suspend fun undoAnnotation(id:String)=mutex.withLock { dao.undoAnnotation(id); notifyChange() }
+    suspend fun undoAnnotation(id:String)=mutex.withLock { db.withTransaction { dao.undoAnnotation(id);invalidateAllDays() }; notifyChange() }
     suspend fun preview(start:Long,end:Long,id:String?=null): DeletionPreview = mutex.withLock {
         require(end>start); DeletionPreview(cachedPolicy.generation,start,end,if(id!=null) 1 else dao.episodes(start,end).size,dao.observationCount(start,end),id)
     }
@@ -250,6 +300,7 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
             dao.deleteMedia(preview.startMs,preview.endMs)
             val zone=ZoneId.of(p.archiveZone); val from=Instant.ofEpochMilli(preview.startMs).atZone(zone).toLocalDate().toString(); val to=Instant.ofEpochMilli(preview.endMs-1).atZone(zone).toLocalDate().toString()
             dao.deleteSummaries(from,to); dao.deleteMetrics(from,to)
+            dao.deleteMetaRange("achievement.day.v1:","achievement.day.v1:\uffff")
             dao.putOperation(OperationRow(UUID.randomUUID().toString(),System.currentTimeMillis(),"DELETE",ids.size.toLong()))
         }; notifyChange()
     }
@@ -279,14 +330,14 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
                 val updated=d.episodes.filter { it.isFavorite||it.endMs>=episodeCutoff }.map { e ->
                     if(e.startMs<cutoff||(e.kind=="NOTICE"&&e.startMs<now-config.noticeTextDays*86_400_000L))e.copy(detail=if(e.kind=="NOTICE") "${e.packageName} · 通知正文已到期" else e.detail,evidence=e.evidence.map { it.copy(rawAvailable=false) }) else e
                 }
-                if(updated!=d.episodes)dao.putSummary(row.copy(json=WoJson.encodeToString(d.copy(episodes=updated))))
+                if(updated!=d.episodes)dao.putSummary(row.copy(revision=row.revision+1,json=WoJson.encodeToString(d.copy(episodes=updated,revision=row.revision+1))))
             }
             val expired=dao.episodes(0,episodeCutoff).filter { !WoJson.decodeFromString<Episode>(it.json).isFavorite }.map { it.id }
             expired.forEach { dao.removeIndex(it) };dao.deleteRelations(expired);dao.deleteAnnotations(expired);dao.deleteEpisodes(expired)
         }
         runCatching { db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").close() }
         context.cacheDir.listFiles()?.filter { it.lastModified()<now-86_400_000L }?.forEach { it.deleteRecursively() }
-        notifyChange()
+        invalidateAllDays();notifyChange()
     }
     suspend fun dirtyDays(): Set<LocalDate> = dao.dirty().flatMap { d ->
         val z=ZoneId.of(cachedPolicy.archiveZone); val a=Instant.ofEpochMilli(d.startMs).atZone(z).toLocalDate(); val b=Instant.ofEpochMilli(d.endMs).atZone(z).toLocalDate()

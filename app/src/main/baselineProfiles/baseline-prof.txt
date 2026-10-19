@@ -1,0 +1,31 @@
+# Source-selected critical paths, not measured performance claims.
+# Regenerate from benchmark journeys with scripts/import_profiles.py.
+Lcom/personal/wo/WoApplication;
+Lcom/personal/wo/MainActivity;
+Lcom/personal/wo/Graph;
+Lcom/personal/wo/ui/WoViewModel;
+Lcom/personal/wo/data/WoRepository;
+Lcom/personal/wo/core/DayView;
+HSPLcom/personal/wo/WoApplication;->onCreate()V
+HSPLcom/personal/wo/WoApplication;->initialize()V
+HSPLcom/personal/wo/WoApplication$initialize$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
+HSPLcom/personal/wo/MainActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLcom/personal/wo/Graph;-><init>(Landroid/content/Context;)V
+HSPLcom/personal/wo/data/KeyVault;->password()[B
+HSPLcom/personal/wo/data/WoRepository;->cachedDay(**)**
+HSPLcom/personal/wo/data/WoRepository;->currentDay(**)**
+HSPLcom/personal/wo/ui/WoViewModel;-><init>(Landroid/app/Application;)V
+HSPLcom/personal/wo/ui/HomeProjectionCache;->project(**)**
+HSPLcom/personal/wo/ui/AppUiKt;->WoAppUi(**)**
+HSPLcom/personal/wo/ui/DayDrumUiKt;->DayDrumHome(**)**
+HPLcom/personal/wo/core/DayChaptersKt;->dayChapters(**)**
+HPLcom/personal/wo/core/DayClockKt;->advanceDayClock(**)**
+HPLcom/personal/wo/ui/TimelineWheelKt;->CylinderPages(**)**
+HPLcom/personal/wo/ui/TimelineMotionKt;->drumPose(**)**
+HPLcom/personal/wo/ui/TimelineMotionKt;->**(**)**
+HPLcom/personal/wo/ui/DayAtmosphereKt;->TimelineAtmosphere(**)**
+HPLcom/personal/wo/ui/VisualsKt;->PhotoThumbnail(**)**
+HPLcom/personal/wo/ui/ThumbnailDispatcher;->load(**)**
+HPLcom/personal/wo/data/AchievementStore;->load(**)**
+HPLcom/personal/wo/core/AchievementAccumulator;->accept(**)**
+HPLcom/personal/wo/ui/AchievementsUiKt;->AchievementsPage(**)**

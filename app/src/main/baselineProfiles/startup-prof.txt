@@ -1,0 +1,18 @@
+# Keep DEX startup placement narrower than the complete interaction profile.
+Lcom/personal/wo/WoApplication;
+Lcom/personal/wo/MainActivity;
+Lcom/personal/wo/Graph;
+Lcom/personal/wo/ui/WoViewModel;
+Lcom/personal/wo/data/WoRepository;
+Lcom/personal/wo/core/DayView;
+HSPLcom/personal/wo/WoApplication;->onCreate()V
+HSPLcom/personal/wo/WoApplication;->initialize()V
+HSPLcom/personal/wo/WoApplication$initialize$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
+HSPLcom/personal/wo/MainActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLcom/personal/wo/Graph;-><init>(Landroid/content/Context;)V
+HSPLcom/personal/wo/data/KeyVault;->password()[B
+HSPLcom/personal/wo/data/WoRepository;->cachedDay(**)**
+HSPLcom/personal/wo/ui/WoViewModel;-><init>(Landroid/app/Application;)V
+HSPLcom/personal/wo/ui/HomeProjectionCache;->project(**)**
+HSPLcom/personal/wo/ui/AppUiKt;->WoAppUi(**)**
+HSPLcom/personal/wo/ui/DayDrumUiKt;->DayDrumHome(**)**

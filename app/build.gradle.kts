@@ -21,8 +21,8 @@ android {
         applicationId = "com.personal.wo"
         minSdk = 29
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.7.1"
+        versionCode = 13
+        versionName = "1.7.2"
         buildConfigField("String", "HUAWEI_APP_ID", "\"\"")
         buildConfigField("String", "HUAWEI_APPROVED_SCOPES", "\"\"")
         buildConfigField("String", "HUAWEI_CERT_SHA256", "\"\"")
@@ -58,6 +58,16 @@ android {
             signingConfig = signingConfigs.findByName("personalRelease")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             ndk { abiFilters.clear(); abiFilters += "arm64-v8a" }
+        }
+        if(providers.gradleProperty("wo.benchmarks").orNull=="true")create("benchmark") {
+            initWith(getByName("release"))
+            val generation=providers.gradleProperty("wo.profileGeneration").orNull=="true"
+            isMinifyEnabled=!generation
+            isShrinkResources=!generation
+            isDebuggable=false
+            signingConfig=signingConfigs.getByName("debug")
+            matchingFallbacks+=listOf("release")
+            ndk { abiFilters.clear();abiFilters+=listOf("arm64-v8a","x86_64") }
         }
     }
     buildFeatures { compose = true; buildConfig = true }

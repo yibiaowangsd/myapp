@@ -72,8 +72,10 @@ class DayDrumUiTest {
         }
     }
     @Composable private fun Shell(s:WoUiState=state(),dark:Boolean=false,open:(DayChapter)->Unit={},stats:()->Unit={},onDate:(LocalDate)->Unit={},threshold:(Int)->Unit={}) {
+        // Production publishes this projection with the DayView after background work.
+        val prepared=remember(s.day,s.homeAppMinMinutes){s.copy(homeProjection=s.day?.let{HomeProjection(it,s.homeAppMinMinutes,dayChapters(it,s.homeAppMinMinutes))})}
         WoTheme(dark=dark) { Scaffold(bottomBar={AppNavigation(0){}}) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) { DayDrumHome(s,open,stats,{},{},{},onDate,threshold,today=date) }
+            Box(Modifier.fillMaxSize().padding(padding)) { DayDrumHome(prepared,open,stats,{},{},{},onDate,threshold,today=date) }
         } }
     }
     @Test fun homeGroupsPeriodsAndOpensStatisticsExplicitly() {

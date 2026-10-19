@@ -2,6 +2,10 @@ package com.personal.wo.collector
 
 import android.Manifest
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.supervisorScope
 import android.app.AppOpsManager
 import android.content.ComponentName
 import android.content.Context
@@ -31,7 +35,8 @@ object Capabilities {
     fun healthPermissions():Set<String> = setOf(HealthPermission.getReadPermission(StepsRecord::class),HealthPermission.getReadPermission(SleepSessionRecord::class),HealthPermission.getReadPermission(ExerciseSessionRecord::class))
     suspend fun probe(c:Context,p:Policy):List<SourceState> {
         fun s(source:Source,grant:Boolean,support:Boolean=true,detail:String="",partial:Boolean=false)=SourceState(source,support,if(grant) if(partial) "PARTIAL" else "GRANTED" else "DENIED",if(!p.requested||source !in p.enabledSources) "STOPPED" else if(p.paused) "PAUSED" else if(grant&&support) "RUNNING" else "STOPPED",detail=detail)
-        return Source.entries.map { source -> probeSource(source,p) { when(source) {
+        return supervisorScope { Source.entries.map { source -> async(Dispatchers.IO) {
+            withTimeoutOrNull(1_500) { probeSource(source,p) { when(source) {
             Source.USAGE -> s(source,usage(c),detail="公开UsageEvents；统计活动区间并去除重叠")
             Source.LOCATION -> {
                 val lm=c.getSystemService(LocationManager::class.java)
@@ -65,7 +70,8 @@ object Capabilities {
                 s(source,permissions.isNotEmpty()&&permissions.any { it in healthPermissions() },available,if(!available)"Health Connect未提供；其他功能可以继续" else "步数聚合、运动与睡眠来源")
             }
             Source.ACCESSIBILITY -> s(source,window(c),detail="可选窗口包名；不读取屏幕正文、不执行手势")
-        } } }
+            } } } ?: SourceState(source,authorization="UNKNOWN",runtime="STOPPED",detail="来源响应较慢，稍后重试；其他来源继续使用")
+        } }.awaitAll() }
     }
     fun sourceName(s:Source)=when(s) { Source.USAGE->"应用活动";Source.LOCATION->"位置与足迹";Source.STEPS->"硬件步数";Source.NOTIFICATION->"通知线索";Source.MEDIA->"媒体播放";Source.PHOTO->"照片与视频";Source.CALENDAR->"日历计划";Source.HEALTH->"活动与健康";Source.ACCESSIBILITY->"窗口切换增强" }
     fun special(c:Context,source:Source):Intent=when(source) {

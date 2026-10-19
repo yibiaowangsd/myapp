@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.*
@@ -29,12 +30,26 @@ import com.personal.wo.core.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.*
 import java.time.format.DateTimeFormatter
 
 object ThumbnailCache {
     val cache=object:LruCache<String,Bitmap>(24*1024*1024){override fun sizeOf(key:String,value:Bitmap)=value.allocationByteCount}
     val gate=Semaphore(1)
+    private val versions=mutableMapOf<String,Long>()
+    private var epoch=0L
+    val changes=MutableStateFlow(0L)
+    @Synchronized fun key(uri:String,width:Int,height:Int)="$uri\u0000$epoch:${versions[uri]?:0}:$width:$height"
+    @Synchronized fun invalidate(uris:Collection<String>) {
+        if(uris.isEmpty())return
+        if(versions.size+uris.size>256) { versions.clear();epoch++;cache.evictAll() }
+        uris.distinct().forEach { uri ->
+            versions[uri]=(versions[uri]?:0)+1
+            cache.snapshot().keys.filter { it==uri||it.startsWith("$uri\u0000") }.forEach { cache.remove(it) }
+        }
+        changes.value+=1
+    }
     fun trim(level:Int) {
         when {
             level==ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> Unit
@@ -43,17 +58,27 @@ object ThumbnailCache {
         }
     }
 }
+internal val LocalThumbnailPriority=staticCompositionLocalOf { 0 }
+internal val LocalThumbnailEnabled=staticCompositionLocalOf { true }
+internal fun thumbnailBucket(pixels:Int)=when { pixels<=128->128;pixels<=256->256;pixels<=512->512;pixels<=768->768;else->1024 }
 @Composable fun PhotoThumbnail(uri:String,modifier:Modifier=Modifier.fillMaxWidth().heightIn(min=100.dp,max=260.dp),crop:Boolean=false) {
-    val context=LocalContext.current
-    var finished by remember(uri){mutableStateOf(false)}
-    val bitmap by produceState<Bitmap?>(ThumbnailCache.cache.get(uri),uri) {
-        value=value?:withContext(Dispatchers.IO){ThumbnailCache.gate.withPermit{
-            ThumbnailCache.cache.get(uri) ?: runCatching{context.contentResolver.loadThumbnail(Uri.parse(uri),AndroidSize(512,512),null).also{ThumbnailCache.cache.put(uri,it)}}.getOrNull()
-        }}
-        finished=true
+    val context=LocalContext.current.applicationContext
+    val priority=LocalThumbnailPriority.current;val enabled=LocalThumbnailEnabled.current
+    var measured by remember(uri){mutableStateOf(IntSize.Zero)}
+    val revision by ThumbnailCache.changes.collectAsState()
+    val width=thumbnailBucket(measured.width);val height=thumbnailBucket(measured.height)
+    val key=remember(uri,width,height,revision){ThumbnailCache.key(uri,width,height)}
+    var finished by remember(key){mutableStateOf(false)}
+    val bitmap by produceState<Bitmap?>(ThumbnailCache.cache.get(key) ?: ThumbnailCache.cache.get(uri),key,enabled,priority) {
+        value=ThumbnailCache.cache.get(key) ?: ThumbnailCache.cache.get(uri)
+        if(value==null&&enabled&&measured.width>0&&measured.height>0) {
+            value=ThumbnailDispatcher.load(context,uri,width,height,priority,key)
+            finished=true
+        }
     }
-    if(bitmap!=null)Image(bitmap!!.asImageBitmap(),"关联媒体缩略图",modifier.clip(RoundedCornerShape(14.dp)),contentScale=if(crop)ContentScale.Crop else ContentScale.Fit)
-    else Surface(modifier.clip(RoundedCornerShape(14.dp)),color=MaterialTheme.colorScheme.surfaceVariant) {
+    val imageModifier=modifier.onSizeChanged { measured=it }.clip(RoundedCornerShape(14.dp))
+    if(bitmap!=null)Image(bitmap!!.asImageBitmap(),"关联媒体缩略图",imageModifier,contentScale=if(crop)ContentScale.Crop else ContentScale.Fit)
+    else Surface(imageModifier,color=MaterialTheme.colorScheme.surfaceVariant) {
         Box(Modifier.padding(12.dp),contentAlignment=Alignment.Center){Text(if(finished)"照片暂不可访问" else "照片加载中",style=MaterialTheme.typography.labelSmall)}
     }
 }
