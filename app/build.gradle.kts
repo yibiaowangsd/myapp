@@ -38,6 +38,7 @@ android {
             buildConfigField("String", "HUAWEI_APPROVED_SCOPES", "\"$huaweiScopes\"")
             buildConfigField("String", "HUAWEI_CERT_SHA256", "\"$huaweiCertificate\"")
             manifestPlaceholders["huaweiAppId"] = "appid=$huaweiAppId"
+            proguardFile("proguard-huawei.pro")
         }
     }
     signingConfigs {

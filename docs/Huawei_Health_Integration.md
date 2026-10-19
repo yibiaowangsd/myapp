@@ -23,7 +23,7 @@
 | Health Service Kit | 申请运动健康服务，选择实际Android应用和最小数据读取范围，通过平台审核后还需用户授权 |
 | 本次不使用 | 扩展能力`com.huawei.hihealth:hihealthkit`、云侧REST、云事件订阅、后台账号轮询；无需新增AGConnect构建插件 |
 
-版本核对边界：公开Android版本历史页本次未能稳定返回正文，官方Maven未提供可读版本列表。本次**可核验、实际解析的是6.16.0.300**，不宣称已穷尽证明其为2026-10-19全站最新原生Android发行。Flutter包`6.17.0+300`与REST变更`6.26.6.200`不能作为Android Maven SDK最新版依据。正式发布前应在开发者控制台的Android基础能力SDK下载/版本说明再次核定并保留公告，升级后重跑全部检查，不使用动态版本。
+版本核对边界：公开Android版本历史页本次未能稳定返回正文，官方Maven未提供可读版本列表。本次**可核验、实际解析的是6.16.0.300**，无法独立确认全站最新原生Android发行。Flutter包`6.17.0+300`与REST变更`6.26.6.200`不能作为Android Maven SDK最新版依据。正式发布前应在开发者控制台的Android基础能力SDK下载/版本说明再次核定并保留公告，升级后重跑全部检查，不使用动态版本。
 
 项目仍为minSdk29、targetSdk36、JDK17。目标设备的HMS Core、运动健康App版本与地区支持须按所选SDK官方要求实测，不把旧codelab的EMUI版本和非华为限制当作最新矩阵。
 
@@ -63,6 +63,8 @@
 
 > 应用“我”在用户主动连接华为账号并选择允许的数据类型后，将获准的步数日聚合与单次运动起止信息用于个人时间轴和每日统计。历史查询仅补充最近七日回顾，不与手机硬件步数重复累加。数据保存在本机加密数据库；此接入路径不上传开发者服务器，不用于广告或转售。用户可以在应用内撤销授权并清理对应导入数据，也可在华为官方授权管理撤销。睡眠为后续独立申请范围，仅在真实主体符合高阶资质且审核通过后启用；未获批前不请求、不读取。
 
+应用另有本人主动触发的HTTPS事实整理功能，发送选定日的结构化事实，可能包含聚合步数。若实际启用，应在申请材料中如实补充接收端点、用途、事实范围及用户授权；本接入模块的本机存储不能被写成整个增强应用没有网络数据传输。
+
 这段文字描述拟申请功能，不代表已经获批或读取真实数据。个人/企业申请材料清单、数据使用表、隐私政策、功能界面/视频、应用市场证明等应按平台当前表单完整提供，不能虚填服务开通截图或账号数据截图。
 
 ## 正式申请与配置步骤
@@ -80,7 +82,7 @@
 ./gradlew --no-parallel --max-workers=1 \
   :core:test :app:testPersonalOfflineDebugUnitTest :app:testPersonalEnhancedDebugUnitTest \
   :app:lintPersonalOfflineDebug :app:lintPersonalEnhancedDebug \
-  :app:assemblePersonalOfflineDebug :app:assemblePersonalEnhancedDebug
+  :app:assemblePersonalOfflineDebug :app:assemblePersonalEnhancedDebug :app:assemblePersonalEnhancedRelease
 ./gradlew :app:assemblePersonalEnhancedRelease
 ```
 
@@ -93,6 +95,7 @@ Release签名仅由本人构建环境提供。没有原keystore时的构建仅�
 - 最近7个归档自然日采用时区真实日界，支持23/25小时夏令时日。未获周历史时，不查询授权前范围；首个不完整授权日不伪装为完整日步数。空数据不补0，真实0保留。SDK若返回其他时区日界则不导入成本归档日。
 - 每次请求上限200条，超限拒绝整页，不静默截断。原生运动/睡眠接口分页及跨设备完整性尚未获真机确认，结果标为`complete=false`，按稳定账号/类型/原生ID幂等更新，不把空页当作全部删除。**全量历史与远端删除同步尚未完成**；接口留出完整快照标志供后续验证后扩展。
 - 华为和Health Connect仍使用既有`HEALTH`大类，通过payload.provider隔离；旧V1无provider行按Health Connect识别。快照只对账本provider/类型，不覆盖另一个平台。Room表结构/版本保持V1，无破坏性迁移。
+- 增强变体单独使用`app/proguard-huawei.pro`。首次Release检查发现SDK对厂商隐藏API、可选HiAnalytics及可选Bouncy Castle的16个类型引用；已核对固定SDK的存在性判断、异常处理与JCE SecureRandom回退，仅为这些具体类型配置`-dontwarn`。应用密码组件与离线变体不变，SDK数据模型沿用其consumer规则。升级SDK后须重新核对这些规则及R8构建，规则不代表真机路径已验收。
 - 同日有效日聚合优先级：华为 → Health Connect → 本机硬件增量。总数不相加、不以最大值替代来源选择；同来源最新修正可下降或为0。统计和时间轴采用同一选择。本机原始计步继续保存，华为撤回后可以回退。
 - 本地撤权先使在途响应失效，停止读取并清理华为原始观察、派生片段和日快照，再向华为撤权。未获官方确认时保留“已停止读取，撤权待重试”，进程重启不自动重连，不删除华为源账号数据。外部撤权在下次前台核验发现，断网不冒充已确认撤权。
 - 账号切换清理上个账号的华为导入；部分权限撤回清理对应类型。暂停、停止、删除防重导继续使用原generation与排除规则。仅前台按已有同步节奏读取，不增加常驻服务或后台授权轮询。

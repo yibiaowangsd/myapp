@@ -72,19 +72,19 @@ class HmsHuaweiGateway(private val c:Context):HuaweiGateway {
 
 /** Unset SDK Values can default to 0. Only an explicitly set integer is a real zero. */
 internal fun normalizeHuaweiDailySteps(samples:List<SamplePoint>,day:Span,date:String):HuaweiPage {
-        // HMS daily boundaries can follow the device zone. Reject a different archive day.
-        val points=samples.filter { it.getStartTime(MILLISECONDS)==day.start&&it.getEndTime(MILLISECONDS) in (day.end-1)..day.end }
-        require(points.size<=1) { "Ambiguous daily totals; do not add device streams" }
-        val point=points.singleOrNull() ?: return HuaweiPage(emptyList())
-        // Use SDK field lookup: native maps may encode the field name with a suffix.
-        // DT_CONTINUOUS_STEPS_DELTA normally carries FIELD_STEPS_DELTA.
-        val values=listOf(Field.FIELD_STEPS_DELTA,Field.FIELD_STEPS).mapNotNull { field->
-            runCatching { point.getFieldValue(field) }.getOrNull()?.takeIf { it.isSet&&it.format==Field.FORMAT_INT32 }
-        }.map { it.asIntValue().toLong() }.distinct()
-        require(values.size<=1) { "Ambiguous step fields" }
-        val count=values.singleOrNull() ?: return HuaweiPage(emptyList())
-        require(count>=0)
-        return HuaweiPage(listOf(HuaweiRecord("daily:$date",Kind.HEALTH_STEPS,day.start,day.end,count,"华为运动健康")),complete=true)
+    // HMS daily boundaries can follow the device zone. Reject a different archive day.
+    val points=samples.filter { it.getStartTime(MILLISECONDS)==day.start&&it.getEndTime(MILLISECONDS) in (day.end-1)..day.end }
+    require(points.size<=1) { "Ambiguous daily totals; do not add device streams" }
+    val point=points.singleOrNull() ?: return HuaweiPage(emptyList())
+    // Use SDK field lookup: native maps may encode the field name with a suffix.
+    // DT_CONTINUOUS_STEPS_DELTA normally carries FIELD_STEPS_DELTA.
+    val values=listOf(Field.FIELD_STEPS_DELTA,Field.FIELD_STEPS).mapNotNull { field->
+        runCatching { point.getFieldValue(field) }.getOrNull()?.takeIf { it.isSet&&it.format==Field.FORMAT_INT32 }
+    }.map { it.asIntValue().toLong() }.distinct()
+    require(values.size<=1) { "Ambiguous step fields" }
+    val count=values.singleOrNull() ?: return HuaweiPage(emptyList())
+    require(count>=0)
+    return HuaweiPage(listOf(HuaweiRecord("daily:$date",Kind.HEALTH_STEPS,day.start,day.end,count,"华为运动健康")),complete=true)
 }
 
 private suspend fun <T> Task<T>.awaitHms():T=withTimeout(10_000) {
