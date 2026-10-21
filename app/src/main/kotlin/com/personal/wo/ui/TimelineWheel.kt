@@ -2,16 +2,20 @@ package com.personal.wo.ui
 
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
@@ -26,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.personal.wo.core.*
 import java.time.LocalDate
@@ -87,7 +92,7 @@ private fun axisAt(x: Float, width: Float, y: Float, arc: Float): Float {
         val axisY = if (staggered) sceneHeight / 2f else sceneHeight - with(density) { 20.dp.toPx() }
         val arc = with(density) { 6.dp.toPx() }
         val ink = MaterialTheme.colorScheme.onSurface
-        val shape = RoundedCornerShape(22.dp)
+        val shape = RoundedCornerShape(20.dp)
         val visible by remember(pager, chapters.size) {
             derivedStateOf { (pager.currentPage - 3..pager.currentPage + 3).filter { it in 0..chapters.size + 1 } }
         }
@@ -96,7 +101,12 @@ private fun axisAt(x: Float, width: Float, y: Float, arc: Float): Float {
                 moveTo(0f, axisY)
                 quadraticTo(size.width / 2f, axisY + 2f * arc, size.width, axisY)
             }
-            drawPath(rail, ink.copy(alpha = .18f), style = Stroke(1.dp.toPx()))
+            drawPath(rail, ink.copy(alpha = .21f), style = Stroke(1.dp.toPx()))
+            for (tick in 0..40) {
+                val x = size.width * tick / 40f
+                val y = axisAt(x, size.width, axisY, arc)
+                drawLine(ink.copy(alpha=.12f),Offset(x,y-2.dp.toPx()),Offset(x,y+2.dp.toPx()),1.dp.toPx())
+            }
             val position = pager.currentPage + pager.currentPageOffsetFraction
             visible.forEach { index ->
                 val pose = drumPose(index - position)
@@ -224,29 +234,50 @@ private fun axisAt(x: Float, width: Float, y: Float, arc: Float): Float {
 @Composable private fun WheelChapterFace(chapter: DayChapter, zone: String, modifier: Modifier, height: Float, largeType: Boolean) {
     val ink = MaterialTheme.colorScheme.onSurface
     val roomy = height >= if (largeType) 180f else 138f
-    Surface(modifier, shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, ink.copy(alpha = .12f))) {
-        Column(Modifier.fillMaxSize().padding(if (roomy) 14.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text((if (chapter.part.label.endsWith("（推测）")) "推测 · " else "") + partRange(chapter.part, zone),
-                style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(chapter.part.label.removeSuffix("（推测）"), style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Medium, maxLines = if (roomy && chapter.photos.isEmpty()) 2 else 1, overflow = TextOverflow.Ellipsis)
-            if (roomy) {
-                if (chapter.photos.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        chapter.photos.take(2).forEach { photo ->
-                            PhotoThumbnail(photo.uri, Modifier.weight(1f).fillMaxHeight(), crop = true)
+    val photo=chapter.photos.firstOrNull()
+    val title=chapter.part.label.removeSuffix("（推测）")
+    val time=(if(chapter.part.label.endsWith("（推测）"))"推测 · " else "")+partRange(chapter.part,zone)
+    Surface(modifier, shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.surface,
+        border=BorderStroke(1.dp,ink.copy(alpha=.12f))) {
+        if(photo!=null&&roomy) {
+            Box(Modifier.fillMaxSize()) {
+                PhotoThumbnail(photo.uri,Modifier.fillMaxSize(),crop=true)
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha=.72f),.3f to Color.Black.copy(alpha=.56f),.5f to Color.Black.copy(alpha=.12f),1f to Color.Black.copy(alpha=.9f))))
+                Column(Modifier.fillMaxSize().padding(14.dp),verticalArrangement=Arrangement.SpaceBetween) {
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
+                        Text(time,Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=Color.White,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Icon(Icons.Outlined.PhotoLibrary,null,Modifier.size(16.dp),tint=WoMint)
+                    }
+                    Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Text(title,style=MaterialTheme.typography.titleLarge,color=Color.White,fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Text("${chapter.photos.size}项影像 · ${chapter.part.episodes.size}个片段",style=MaterialTheme.typography.labelSmall,color=Color.White.copy(alpha=.8f),maxLines=1)
+                    }
+                }
+                if(chapter.photos.size>1)Box(Modifier.align(Alignment.CenterEnd).padding(end=14.dp).size(44.dp).clip(RoundedCornerShape(9.dp))) {
+                    PhotoThumbnail(chapter.photos[1].uri,Modifier.fillMaxSize(),crop=true)
+                }
+            }
+        } else {
+            Box(Modifier.fillMaxSize()) {
+                val accent=laneTint(chapter.part.episodes.firstOrNull()?.lane ?: Lane.LIFE)
+                Canvas(Modifier.fillMaxSize()) {
+                    drawCircle(accent.copy(alpha=.08f),size.width*.46f,Offset(size.width*1.02f,size.height*.58f))
+                    drawCircle(accent.copy(alpha=.14f),size.width*.34f,Offset(size.width*1.02f,size.height*.58f),style=Stroke(1.dp.toPx()))
+                }
+                Column(Modifier.fillMaxSize().padding(if(roomy)16.dp else 8.dp),verticalArrangement=Arrangement.spacedBy(if(roomy)6.dp else 3.dp)) {
+                    if(height>=76f)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                        Box(Modifier.size(5.dp).background(accent,androidx.compose.foundation.shape.CircleShape))
+                        Text(time,style=MaterialTheme.typography.labelSmall,maxLines=1,overflow=TextOverflow.Ellipsis,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(title,style=if(roomy)MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,maxLines=if(roomy)2 else 1,overflow=TextOverflow.Ellipsis)
+                    if(roomy) {
+                        Text(chapter.summary,Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium,maxLines=if(largeType)2 else 3,overflow=TextOverflow.Ellipsis,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
+                            Text("${durationText(chapter.durationMs)} · ${chapter.part.episodes.size}个片段",Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
+                            Icon(Icons.Outlined.NorthEast,null,Modifier.size(16.dp),tint=accent)
                         }
                     }
-                } else {
-                    Text(chapter.summary, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
-                        maxLines = if (largeType) 2 else 3, overflow = TextOverflow.Ellipsis)
                 }
-                Text(if (chapter.photos.isNotEmpty()) "${chapter.photos.size}项影像 · ${chapter.part.episodes.size}个片段"
-                    else "${durationText(chapter.durationMs)} · ${chapter.part.episodes.size}个片段",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -255,11 +286,15 @@ private fun axisAt(x: Float, width: Float, y: Float, arc: Float): Float {
 @Composable private fun WheelDateFace(day: DayView, previous: Boolean, hasNext: Boolean, modifier: Modifier, height: Float) {
     val date = LocalDate.parse(day.dayDate).plusDays(if (previous) -1 else 1)
     val end = !previous && !hasNext
-    Surface(modifier, shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer,
+    Surface(modifier, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
-        Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.Center) {
+        Column(Modifier.fillMaxSize().padding(if(height>=100f)18.dp else 8.dp), verticalArrangement = Arrangement.Center) {
+            if(height>=170f) {
+                Text(if(previous)"前一页" else "下一页",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(12.dp))
+            }
             Text(if (end) "今天，先到这里" else "${date.monthValue}月${date.dayOfMonth}日",
-                style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                style = if(height>=100f)MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium, maxLines = if(height>=100f)2 else 1, overflow = TextOverflow.Ellipsis)
             if (height >= 100f) Text(if (end) "截至 ${clock(day.asOfMs,day.zoneId)}" else if (previous) "回看前一天" else "继续到后一天",
                 Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelMedium)
             if (height >= 170f) Text(if (end) "新的经历，会继续浮现。" else "轻触翻开这一天",

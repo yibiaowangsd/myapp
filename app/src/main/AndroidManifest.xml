@@ -29,10 +29,14 @@
         <package android:name="com.huawei.health" />
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
     </queries>
-    <application android:name=".WoApplication" android:label="我" android:icon="@drawable/ic_wo" android:roundIcon="@drawable/ic_wo"
+    <application android:name=".WoApplication" android:label="我" android:icon="@mipmap/ic_wo" android:roundIcon="@mipmap/ic_wo"
         android:allowBackup="false" android:fullBackupContent="@xml/backup_rules" android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true" android:usesCleartextTraffic="false" android:theme="@style/Theme.Wo">
         <!-- Initialize WorkManager when recording is requested, not in a provider before onCreate. -->
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.memory-cards" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/memory_share_paths" />
+        </provider>
         <provider android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup" android:exported="false" tools:node="merge">
             <meta-data android:name="androidx.work.WorkManagerInitializer" android:value="androidx.startup" tools:node="remove" />

@@ -25,7 +25,8 @@ import kotlin.reflect.KClass
 import com.personal.wo.health.HuaweiHealthController
 import com.personal.wo.ui.ThumbnailCache
 
-class PullCollectors(private val c:Context,private val repo:WoRepository,private val huawei:HuaweiHealthController?=null) {
+class PullCollectors(private val c:Context,private val repo:WoRepository,private val huawei:HuaweiHealthController?=null,
+    private val photoSourceKey:(String)->String={native->repo.vault.sourceKey("photo",native)}) {
     private val pullGate=PullGate(android.os.SystemClock::elapsedRealtime)
     private val probeGate=ProbeGate(android.os.SystemClock::elapsedRealtime)
     private val labels=mutableMapOf<String,String>()
@@ -115,7 +116,7 @@ class PullCollectors(private val c:Context,private val repo:WoRepository,private
                     val captured=dateTaken>0&&dateTaken<now+300_000
                     val t=if(captured) dateTaken else added
                     mod=q.long("date_modified"); lastId=id
-                    val native="$mediaVersion:$id"; val key=repo.vault.sourceKey("photo",native)
+                    val native="$mediaVersion:$id"; val key=photoSourceKey(native)
                     batch+=Observation(stableId(Source.PHOTO,key),Source.PHOTO,key,Kind.PHOTO,t,receivedMs=now,payload=Payload(uri=ContentUris.withAppendedId(uri,id).toString(),captured=captured,category=if(q.long("media_type")==3L) "VIDEO" else "IMAGE"))
                 }
             }
@@ -124,6 +125,73 @@ class PullCollectors(private val c:Context,private val repo:WoRepository,private
             if(batch.size<200)return
         }
     }
+    /** User-requested history import uses its own keyset cursor and never rewinds live syncing. */
+    suspend fun importPhotoHistory(days:Int,onProgress:suspend (Int,Int)->Unit):Int {
+        require(days>=0)
+        val policy=repo.cachedPolicy
+        check(policy.requested&&!policy.paused) { "先继续记录，再导入照片" }
+        check(Source.PHOTO in policy.enabledSources) { "先在记录权限中开启照片" }
+        val status=repo.source(Source.PHOTO)
+        check(status.authorization in listOf("GRANTED","PARTIAL")) { "请先允许读取照片" }
+        val now=System.currentTimeMillis()
+        val since=if(days==0)0L else now-days.toLong()*86_400_000L
+        val uri=MediaStore.Files.getContentUri("external")
+        val version=MediaStore.getVersion(c)
+        val zone=ZoneId.of(policy.archiveZone)
+        var afterId=0L
+        var count=0
+        val dates=linkedSetOf<LocalDate>()
+        while(true) {
+            currentCoroutineContext().ensureActive()
+            check(repo.cachedPolicy.generation==policy.generation&&repo.cachedPolicy.requested&&!repo.cachedPolicy.paused) { "导入已停止，已整理的照片会保留" }
+            val args=Bundle().apply {
+                putString(ContentResolver.QUERY_ARG_SQL_SELECTION,
+                    "(media_type=1 OR media_type=3) AND _id>? AND (datetaken>=? OR ((datetaken IS NULL OR datetaken<=0 OR datetaken>?) AND date_added>=?))")
+                putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,arrayOf(afterId.toString(),since.toString(),(now+300_000).toString(),(since/1000).toString()))
+                putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS,arrayOf(MediaStore.MediaColumns._ID))
+                putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION,ContentResolver.QUERY_SORT_DIRECTION_ASCENDING)
+                putInt(ContentResolver.QUERY_ARG_LIMIT,200)
+            }
+            val batch=mutableListOf<Observation>()
+            var scanned=0
+            val query=c.contentResolver.query(uri,arrayOf("_id","datetaken","date_added","date_modified","media_type"),args,null)
+                ?: error("相册暂时无法读取，请稍后重试")
+            query.use { q ->
+                while(scanned<200&&q.moveToNext()) {
+                    currentCoroutineContext().ensureActive()
+                    val id=q.long("_id");afterId=id;scanned++
+                    val taken=q.long("datetaken");val captured=taken>0&&taken<=now+300_000
+                    val time=if(captured)taken else q.long("date_added")*1000
+                    if(time<since||time>now+300_000)continue
+                    val key=photoSourceKey("$version:$id")
+                    val observation=Observation(stableId(Source.PHOTO,key),Source.PHOTO,key,Kind.PHOTO,time,
+                        receivedMs=now,eventZoneId=zone.id,payload=Payload(uri=ContentUris.withAppendedId(uri,id).toString(),
+                            captured=captured,category=if(q.long("media_type")==3L)"VIDEO" else "IMAGE"))
+                    batch+=filterObservation(observation,policy)
+                }
+            }
+            if(batch.isNotEmpty()) {
+                val bytes=c.getDatabasePath("wo.db").length()+c.getDatabasePath("wo.db-wal").length()
+                check(bytes<repo.config.databaseSoftLimitMB*1024L*1024) { "本机记录空间已满，已整理的照片会保留" }
+                repo.ingest(batch,policy.generation,Source.PHOTO)
+                count+=batch.size
+                val batchDates=batch.map { Instant.ofEpochMilli(it.startMs).atZone(zone).toLocalDate() }.distinct()
+                dates+=batchDates
+                // Publish actual searchable episodes for every imported date, including old albums.
+                batchDates.sortedDescending().forEach { date ->
+                    currentCoroutineContext().ensureActive()
+                    check(repo.cachedPolicy.generation==policy.generation) { "导入已停止，已整理的照片会保留" }
+                    repo.currentDay(date)
+                }
+                onProgress(count,dates.size)
+            }
+            if(scanned<200)break
+            yield()
+        }
+        repo.log("PHOTO_HISTORY_IMPORTED",count.toLong())
+        return count
+    }
+
     suspend fun calendar() {
         if(!Capabilities.granted(c,Manifest.permission.READ_CALENDAR))return
         val p=repo.cachedPolicy; val now=System.currentTimeMillis(); val from=now-7*86_400_000L; val end=now+7*86_400_000L

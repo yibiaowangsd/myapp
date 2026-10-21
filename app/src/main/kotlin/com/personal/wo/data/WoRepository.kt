@@ -2,6 +2,7 @@ package com.personal.wo.data
 
 import android.content.Context
 import androidx.room.withTransaction
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.personal.wo.core.*
 import com.personal.wo.core.Annotation
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -241,7 +242,10 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
         val cs=dao.coverage(w.start,w.end).map { WoJson.decodeFromString<Coverage>(it.json) }
         val places=places(); val now=clock()
         val previous=dao.episodes(w.start,w.end).associateBy { it.id }
-        val retired=previous.values.map { WoJson.decodeFromString<Episode>(it.json) }.filter { e->e.evidence.any { !it.rawAvailable } }
+        val rawIds=raw.map { it.id }.toSet()
+        val retired=previous.values.map { WoJson.decodeFromString<Episode>(it.json) }.filter { e ->
+            e.evidence.any { !it.rawAvailable } || (e.kind=="PHOTO"&&e.endMs<now-config.rawRetentionDays*86_400_000L&&e.evidence.none { it.id in rawIds })
+        }.map { e -> if(e.kind=="PHOTO"&&e.evidence.none { it.id in rawIds })e.copy(evidence=e.evidence.map { it.copy(rawAvailable=false) }) else e }
         val archivedMetrics=if(cached!=null && w.end<now-config.rawRetentionDays*86_400_000L && p.exclusions.none { (it.source==null||it.source in setOf(Source.HEALTH,Source.STEPS))&&it.startMs<w.end&&(it.endMs?:Long.MAX_VALUE)>w.start })WoJson.decodeFromString<DayView>(cached.json).metrics else emptyList()
         val fresh=engine.episodes(raw,p,places,now)
         val view=engine.build(date,p,raw,places,sources(),cs,ann,now,(cached?.revision ?: 0)+1,retired,archivedMetrics,freshEpisodes=fresh)
@@ -306,17 +310,36 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
             dao.putOperation(OperationRow(UUID.randomUUID().toString(),System.currentTimeMillis(),"DELETE",ids.size.toLong()))
         }; notifyChange()
     }
-    suspend fun search(text:String,from:LocalDate,all:Boolean=false,offset:Int=0):List<Episode> {
-        val normalized=text.trim().lowercase().take(200); if(normalized.isEmpty())return emptyList()
-        val escaped=normalized.replace("\\","\\\\").replace("%","\\%").replace("_","\\_")
-        val zone=ZoneId.of(cachedPolicy.archiveZone); val start=if(all) 0L else window(from,zone).start
-        val tokens=NoticeRules.tokens(normalized).split(" ").filter { it.length>=2 }
-        if(tokens.isNotEmpty()) {
-            val candidates=dao.searchFts(tokens.joinToString(" AND ") { "\"$it\"*" },start,System.currentTimeMillis()+86_400_000L,200,offset)
-            val matched=candidates.filter { it.searchText.contains(normalized) }.take(50)
-            if(matched.isNotEmpty())return matched.map { WoJson.decodeFromString(it.json) }
+    suspend fun search(text:String,from:LocalDate,all:Boolean=false,offset:Int=0,filter:String="ALL"):List<Episode> {
+        val zone=ZoneId.of(cachedPolicy.archiveZone)
+        val request=memorySearch(text,LocalDate.now(zone),zone)
+        val start=request.window?.start ?: if(all)0L else window(from,zone).start
+        val end=request.window?.end ?: clock()+86_400_000L
+        val clauses=mutableListOf("e.startMs>=?","e.startMs<?")
+        val args=mutableListOf<Any>(start,end)
+        if(request.text.isNotBlank()) {
+            val tokens=NoticeRules.tokens(request.text).split(" ").filter { it.length>=2 }.distinct()
+            if(tokens.isNotEmpty()) {
+                // Keep FTS prefix matches and literal substrings in one ordered page.
+                clauses+="(e.id IN (SELECT episodeId FROM event_search WHERE tokens MATCH ?) OR e.searchText LIKE ? ESCAPE '\\')"
+                args+=tokens.joinToString(" AND ") { "\"${it.replace("\"", "\"\"")}\"*" }
+                args+=memoryLikePattern(request.text)
+            } else {
+                clauses+="e.searchText LIKE ? ESCAPE '\\'"
+                args+=memoryLikePattern(request.text)
+            }
         }
-        return dao.search("%$escaped%",start,System.currentTimeMillis()+86_400_000L,50,offset).map { WoJson.decodeFromString(it.json) }
+        when(filter) {
+            "PHOTO"->clauses+="e.kind='PHOTO'"
+            "FAVORITE"->{clauses+="e.json LIKE ?";args+="%\"isFavorite\":true%"}
+            "PLACE"->clauses+="e.kind IN ('STAY','MOVE')"
+            "APP"->clauses+="e.kind='APP'"
+        }
+        args+=50;args+=offset
+        val query=SimpleSQLiteQuery("SELECT e.json FROM episode e WHERE "+clauses.joinToString(" AND ")+" ORDER BY e.startMs DESC,e.id ASC LIMIT ? OFFSET ?",args.toTypedArray())
+        return db.openHelper.readableDatabase.query(query).use { cursor ->
+            buildList { while(cursor.moveToNext())add(WoJson.decodeFromString<Episode>(cursor.getString(0))) }
+        }
     }
     suspend fun maintenance()=mutex.withLock {
         val now=System.currentTimeMillis(); val cutoff=now-config.rawRetentionDays*86_400_000L
@@ -329,12 +352,12 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
             }
             dao.summaries(1000).forEach { row ->
                 val d=WoJson.decodeFromString<DayView>(row.json)
-                val updated=d.episodes.filter { it.isFavorite||it.endMs>=episodeCutoff }.map { e ->
+                val updated=d.episodes.filter { it.kind=="PHOTO"||it.isFavorite||it.endMs>=episodeCutoff }.map { e ->
                     if(e.startMs<cutoff||(e.kind=="NOTICE"&&e.startMs<now-config.noticeTextDays*86_400_000L))e.copy(detail=if(e.kind=="NOTICE") "${e.packageName} · 通知正文已到期" else e.detail,evidence=e.evidence.map { it.copy(rawAvailable=false) }) else e
                 }
                 if(updated!=d.episodes)dao.putSummary(row.copy(revision=row.revision+1,json=WoJson.encodeToString(d.copy(episodes=updated,revision=row.revision+1))))
             }
-            val expired=dao.episodes(0,episodeCutoff).filter { !WoJson.decodeFromString<Episode>(it.json).isFavorite }.map { it.id }
+            val expired=dao.episodes(0,episodeCutoff).filter { it.kind!="PHOTO"&&!WoJson.decodeFromString<Episode>(it.json).isFavorite }.map { it.id }
             expired.forEach { dao.removeIndex(it) };dao.deleteRelations(expired);dao.deleteAnnotations(expired);dao.deleteEpisodes(expired)
         }
         runCatching { db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").close() }

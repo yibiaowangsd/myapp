@@ -34,7 +34,7 @@ internal data class DayAtmosphere(val top: Color, val bottom: Color, val card: C
     val cardInk get() = readableInk(listOf(card))
 }
 private fun readableInk(backgrounds: List<Color>): Color {
-    val dark = Color(0xFF151B2B)
+    val dark = Color(0xFF172620)
     fun contrast(a: Color, b: Color) = (maxOf(a.luminance(), b.luminance()) + .05f) / (minOf(a.luminance(), b.luminance()) + .05f)
     return when {
         backgrounds.all { contrast(it, dark) >= 4.5f } -> dark
@@ -44,14 +44,14 @@ private fun readableInk(backgrounds: List<Color>): Color {
 }
 private data class SkyStop(val hour: Float, val top: Long, val bottom: Long)
 private val skyStops = listOf(
-    SkyStop(0f, 0xFF151D36, 0xFF283557),
-    SkyStop(4f, 0xFF222B47, 0xFF424366),
+    SkyStop(0f, 0xFF142D2A, 0xFF34534A),
+    SkyStop(4f, 0xFF39473D, 0xFF57665B),
     SkyStop(6.5f, 0xFFE9C9B6, 0xFFF8ECE2),
-    SkyStop(10f, 0xFFCFE4EE, 0xFFF2F6F0),
+    SkyStop(10f, 0xFFCDE7DC, 0xFFF7F5E9),
     SkyStop(15f, 0xFFDFEAD9, 0xFFF6F2E7),
-    SkyStop(18.5f, 0xFFEDB79B, 0xFFE8CDCD),
-    SkyStop(20f, 0xFF262A48, 0xFF3A3859),
-    SkyStop(24f, 0xFF151D36, 0xFF283557)
+    SkyStop(18.5f, 0xFFE9B990, 0xFFF1E4C9),
+    SkyStop(20f, 0xFF30423B, 0xFF4C6255),
+    SkyStop(24f, 0xFF142D2A, 0xFF34534A)
 )
 private fun localHour(timeMs: Long, zone: ZoneId): Float =
     Instant.ofEpochMilli(timeMs).atZone(zone).toLocalTime().toNanoOfDay() / 3_600_000_000_000f
@@ -64,13 +64,13 @@ private fun atmosphereAtHour(hour: Float, dark: Boolean): DayAtmosphere {
     val a = skyStops[right - 1]
     val b = skyStops[right]
     val fraction = smoothUnit((hour - a.hour) / (b.hour - a.hour))
-    val base = if (dark) Color(0xFF10131F) else Color(0xFFF5F4EF)
+    val base = if (dark) Color(0xFF101914) else Color(0xFFF5F3EC)
     // Time changes the light, not the polarity of the entire interface. Keeping the
     // surfaces in their system-theme range prevents black/white text threshold flashes.
     fun shade(first: Long, second: Long) =
         lerp(base, lerp(Color(first), Color(second), fraction), if (dark) .20f else .36f)
     return DayAtmosphere(shade(a.top, b.top), shade(a.bottom, b.bottom),
-        if (dark) Color(0xFF232938) else Color(0xFFFCFBF7))
+        if (dark) Color(0xFF1B2921) else Color(0xFFFFFEF9))
 }
 private val LocalAtmosphere = staticCompositionLocalOf { DayAtmosphere(Color.White, Color.White, Color.White) }
 
@@ -92,7 +92,7 @@ private val LocalAtmosphere = staticCompositionLocalOf { DayAtmosphere(Color.Whi
     val lightX = animateFloatAsState(.5f + .18f * sin(hour / 24f * 2f * PI.toFloat()),
         spring(dampingRatio = 1f, stiffness = 90f), label = "sky-light-position")
     val paper = remember(dark) {
-        val card = if (dark) Color(0xFF232938) else Color(0xFFFCFBF7)
+        val card = if (dark) Color(0xFF1B2921) else Color(0xFFFFFEF9)
         DayAtmosphere(card, card, card)
     }
     val ink = paper.cardInk

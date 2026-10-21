@@ -46,8 +46,8 @@ class MainNavigationTest {
                 SettingsShortcuts({opened+="permissions"},{opened+="connections"},{opened+="insights"})
             } }
         }
-        compose.onNodeWithText("记录权限").performClick()
-        compose.onNodeWithText("应用与来源").performClick()
+        compose.onNodeWithText("记录来源").performClick()
+        compose.onNodeWithText("应用与连接").performClick()
         compose.onNodeWithText("生活趋势").performClick()
         assertEquals(listOf("permissions","connections","insights"),opened)
     }

@@ -19,7 +19,9 @@ import java.time.*
 data class WoUiState(
     val loaded:Boolean=false,val busy:Boolean=false,val message:String?=null,val startupError:String?=null,val policy:Policy=Policy(),
     val day:DayView?=null,val history:List<DayView> = emptyList(),val sources:List<SourceState> = emptyList(),
-    val episode:Episode?=null,val results:List<Episode> = emptyList(),val places:List<Place> = emptyList(),
+    val episode:Episode?=null,val episodeLoading:Boolean=false,val results:List<Episode> = emptyList(),val places:List<Place> = emptyList(),
+    val searching:Boolean=false,val searchHasMore:Boolean=false,
+    val photoImportBusy:Boolean=false,val photoImportCount:Int=0,val photoImportProgress:String="",
     val insights:List<Insight> = emptyList(),val recoveryCode:String?=null,val inspection:RestoreInspection?=null,
     val selectedDate:String=LocalDate.now().toString(),val demo:Boolean=false,val databaseBytes:Long=0,
     val diagnostics:List<String> = emptyList(),val positions:List<Observation> = emptyList(),
@@ -35,6 +37,12 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     val state=mutable.asStateFlow()
     private var loadJob:Job?=null
     private var searchJob:Job?=null
+    private var episodeJob:Job?=null
+    private var episodeRevision=0L
+    private var photoImportJob:Job?=null
+    private val publicSetupMutex=Mutex()
+    private var searchRevision=0L
+    private var dateNavigationRevision=0L
     private var initializationJob:Job?=null
     private var huaweiStateJob:Job?=null
     private var foregroundJob:Job?=null
@@ -50,7 +58,7 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     private var demoJob:Job?=null
     @Volatile private var historyVisible=false
     private var appsJob:Job?=null
-    private var searchText="";private var searchAll=false
+    private var searchText="";private var searchAll=false;private var searchFilter="ALL"
     @Volatile private var visible=true
     init { initialize() }
     private fun initialize() {
@@ -137,8 +145,9 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
         }
     }
     fun foreground() { visible=true;synchronize(false) }
-    fun background() { visible=false;syncGeneration++;synchronizing=false;mutable.update { it.copy(busy=false) };loadJob?.cancel();searchJob?.cancel();foregroundJob?.cancel() }
+    fun background() { visible=false;syncGeneration++;synchronizing=false;mutable.update { it.copy(busy=false) };loadJob?.cancel();foregroundJob?.cancel() }
     fun date(date:LocalDate) {
+        dateNavigationRevision++
         demoJob?.cancel()
         val today=LocalDate.now(ZoneId.of(mutable.value.policy.archiveZone))
         val target=minOf(date,today)
@@ -228,14 +237,157 @@ class WoViewModel(application:Application):AndroidViewModel(application) {
     fun lock(on:Boolean)=action { g -> g.repo.configure { it.copy(lockUi=on) } }
     fun enhancedConfig(endpoint:String,model:String,key:String)=action { g -> val service=EnhancedSummary(g.repo);val old=service.config();service.save(EnhancedConfig(endpoint,key.ifBlank { old.apiKey },model));message("增强配置已保存在本机，访问密钥已加密") }
     fun enhance() { viewModelScope.launch(Dispatchers.IO) { val day=mutable.value.day ?: return@launch;try { val sentences=EnhancedSummary(app.graph().repo).arrange(day);mutable.update { if(it.day?.revision==day.revision&&it.day?.dayDate==day.dayDate)it.copy(day=day.copy(sentences=sentences)) else it };message("已按已知事实调整摘要顺序") }catch(e:Exception){message(e.message ?: "增强未完成，保留本地摘要")} } }
-    fun episode(id:String) { action { g -> mutable.update { it.copy(episode=if(it.demo)it.day?.episodes?.firstOrNull { e -> e.id==id } else g.repo.episode(id)) } } }
-    fun annotate(title:String,confirmed:Boolean,start:Long?=null,end:Long?=null)=action { g -> val e=mutable.value.episode ?: return@action;g.repo.annotate(e,title,confirmed,start=start,end=end);mutable.update { it.copy(episode=g.repo.episode(e.id)) };message("片段已更新") }
-    fun favorite()=action { g -> val e=mutable.value.episode ?: return@action;g.repo.annotate(e,null,false,!e.isFavorite);mutable.update { it.copy(episode=g.repo.episode(e.id)) } }
-    fun namePlace(name:String)=action { g -> val e=mutable.value.episode ?: return@action;g.repo.namePlace(e,name);message("地点已命名，后续停留将自动匹配") }
-    fun deleteEpisode()=action { g -> val e=mutable.value.episode ?: return@action;val p=g.repo.preview(e.startMs,maxOf(e.endMs,e.startMs+1),e.id);g.repo.delete(p);mutable.update { it.copy(episode=null,results=it.results.filterNot { r->r.id==e.id }) };message("片段和相关依据已删除，并阻止再次导入") }
-    fun deleteDay()=action { g -> val d=mutable.value.day ?: return@action;g.repo.delete(g.repo.preview(d.windowStartMs,d.windowEndMs));mutable.update { it.copy(results=it.results.filterNot { e->e.startMs<d.windowEndMs&&e.endMs>=d.windowStartMs }) };message("这一天的记录已删除，并阻止历史补采") }
-    fun search(text:String,all:Boolean=false) { searchText=text;searchAll=all;searchJob?.cancel();searchJob=viewModelScope.launch(Dispatchers.IO) { recoverableTask { delay(300);val r=app.graph().repo.search(text,LocalDate.now().minusDays(90),all);mutable.update { it.copy(results=r) } }.onFailure { failure("搜索",it) } } }
-    fun moreSearch() { if(mutable.value.results.size>=200)return;searchJob?.cancel();searchJob=viewModelScope.launch(Dispatchers.IO) { recoverableTask { val r=app.graph().repo.search(searchText,LocalDate.now().minusDays(90),searchAll,mutable.value.results.size);mutable.update { it.copy(results=(it.results+r).distinctBy { e->e.id }.take(200)) } }.onFailure { failure("搜索分页",it) } } }
+    fun episode(id:String) {
+        val revision=++episodeRevision
+        val snapshot=mutable.value
+        episodeJob?.cancel()
+        mutable.update { it.copy(episode=null,episodeLoading=true) }
+        episodeJob=viewModelScope.launch {
+            try {
+                val result=if(snapshot.demo)snapshot.day?.episodes?.firstOrNull { it.id==id }
+                    else withContext(Dispatchers.IO) { app.graph().repo.episode(id) }
+                if(revision==episodeRevision)mutable.update { it.copy(episode=result,episodeLoading=false) }
+            } catch(e:CancellationException) { throw e }
+            catch(e:Exception) { if(revision==episodeRevision)mutable.update { it.copy(episodeLoading=false,message="片段暂时未载入，请重试") } }
+        }
+    }
+    fun annotate(title:String,confirmed:Boolean,start:Long?=null,end:Long?=null) {
+        val episode=mutable.value.episode ?: return
+        action { g ->
+            g.repo.annotate(episode,title,confirmed,start=start,end=end)
+            val updated=g.repo.episode(episode.id)
+            mutable.update { if(it.episode?.id==episode.id)it.copy(episode=updated) else it }
+            message("片段已更新")
+        }
+    }
+    fun favorite() {
+        val episode=mutable.value.episode ?: return
+        action { g ->
+            g.repo.annotate(episode,null,false,!episode.isFavorite)
+            val updated=g.repo.episode(episode.id)
+            mutable.update { if(it.episode?.id==episode.id)it.copy(episode=updated) else it }
+        }
+    }
+    fun namePlace(name:String) {
+        val episode=mutable.value.episode ?: return
+        action { g ->
+            g.repo.namePlace(episode,name)
+            message("地点已命名，后续停留将自动匹配")
+        }
+    }
+    fun deleteEpisode() {
+        val episode=mutable.value.episode ?: return
+        action { g ->
+            val preview=g.repo.preview(episode.startMs,maxOf(episode.endMs,episode.startMs+1),episode.id)
+            g.repo.delete(preview)
+            mutable.update { state -> state.copy(episode=if(state.episode?.id==episode.id)null else state.episode,
+                results=state.results.filterNot { it.id==episode.id }) }
+            message("片段和相关依据已删除，并阻止再次导入")
+        }
+    }
+    fun deleteDay() {
+        val day=mutable.value.day ?: return
+        action { g ->
+            g.repo.delete(g.repo.preview(day.windowStartMs,day.windowEndMs))
+            mutable.update { state -> state.copy(results=state.results.filterNot { it.startMs<day.windowEndMs&&it.endMs>=day.windowStartMs }) }
+            message("这一天的记录已删除，并阻止历史补采")
+        }
+    }
+    fun search(text:String,all:Boolean=false,filter:String="ALL") {
+        searchText=text;searchAll=all;searchFilter=filter
+        val revision=++searchRevision
+        searchJob?.cancel()
+        mutable.update { it.copy(searching=true,searchHasMore=false) }
+        searchJob=viewModelScope.launch(Dispatchers.IO) {
+            try {
+                delay(if(text.isBlank())0 else 250)
+                val zone=ZoneId.of(mutable.value.policy.archiveZone)
+                val results=app.graph().repo.search(text,LocalDate.now(zone).minusDays(90),all,filter=filter)
+                ensureActive()
+                if(revision==searchRevision)mutable.update { it.copy(results=results,searching=false,searchHasMore=results.size==50) }
+            } catch(e:CancellationException) { throw e }
+            catch(e:Exception) {
+                if(revision==searchRevision)mutable.update { it.copy(results=emptyList(),searching=false,searchHasMore=false,message="搜索暂时未完成，请重试") }
+            }
+        }
+    }
+    fun moreSearch() {
+        if(mutable.value.searching||!mutable.value.searchHasMore)return
+        val revision=searchRevision;val text=searchText;val all=searchAll;val filter=searchFilter;val offset=mutable.value.results.size
+        searchJob?.cancel();mutable.update { it.copy(searching=true) }
+        searchJob=viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val zone=ZoneId.of(mutable.value.policy.archiveZone)
+                val results=app.graph().repo.search(text,LocalDate.now(zone).minusDays(90),all,offset,filter)
+                ensureActive()
+                if(revision==searchRevision)mutable.update { it.copy(results=(it.results+results).distinctBy { e->e.id },searching=false,searchHasMore=results.size==50) }
+            } catch(e:CancellationException) { throw e }
+            catch(e:Exception) { if(revision==searchRevision)mutable.update { it.copy(searching=false,message="更多回忆暂时未载入，请重试") } }
+        }
+    }
+
+    fun preparePublicSetup() {
+        viewModelScope.launch(Dispatchers.IO) {
+            initialReady.await()
+            publicSetupMutex.withLock {
+                val repo=app.graph().repo
+                if(repo.cachedPolicy.startedMs==null&&!repo.cachedPolicy.requested&&repo.cachedPolicy.enabledSources!=setOf(Source.PHOTO))
+                    repo.configure { it.copy(enabledSources=setOf(Source.PHOTO)) }
+            }
+            reload()
+        }
+    }
+    fun startPhotoJourney()=launchPhotoImport(30)
+    fun importPhotos(days:Int)=launchPhotoImport(days)
+    private fun launchPhotoImport(days:Int) {
+        require(days>=0)
+        if(photoImportJob?.isActive==true)return
+        val originalDate=mutable.value.selectedDate
+        val navigationRevision=dateNavigationRevision
+        val originallyEmpty=mutable.value.day?.episodes.isNullOrEmpty()
+        mutable.update { it.copy(demo=false,photoImportBusy=true,photoImportCount=0,photoImportProgress="正在读取相册") }
+        photoImportJob=viewModelScope.launch(Dispatchers.IO) {
+            try {
+                initialReady.await()
+                val g=app.graph()
+                publicSetupMutex.withLock {
+                    val p=g.repo.cachedPolicy
+                    if(p.startedMs==null&&!p.requested) {
+                        g.repo.configure { it.copy(enabledSources=setOf(Source.PHOTO)) }
+                        g.repo.command("start")
+                    } else {
+                        check(p.requested&&!p.paused) { "记录已暂停，请先在设置中继续记录" }
+                        if(Source.PHOTO !in p.enabledSources)g.repo.configure { it.copy(enabledSources=it.enabledSources+Source.PHOTO) }
+                    }
+                }
+                g.collector.probe(true)
+                WorkScheduling.schedule(app)
+                val count=g.collector.importPhotoHistory(days) { photos,dates ->
+                    mutable.update { it.copy(photoImportCount=photos,photoImportProgress="已整理 $photos 项 · $dates 天") }
+                }
+                mutable.update { it.copy(photoImportCount=count,photoImportProgress=if(count==0)"所选范围没有可读取的照片" else "已整理 $count 项照片与视频") }
+                if(count>0&&originallyEmpty&&dateNavigationRevision==navigationRevision&&mutable.value.selectedDate==originalDate) {
+                    val zone=ZoneId.of(g.repo.cachedPolicy.archiveZone)
+                    val latest=g.repo.search("",LocalDate.now(zone),all=true,filter="PHOTO").firstOrNull()
+                    latest?.let { photo ->
+                        val date=Instant.ofEpochMilli(photo.startMs).atZone(zone).toLocalDate()
+                        mutable.update { state -> if(dateNavigationRevision==navigationRevision)state.copy(selectedDate=date.toString()) else state }
+                    }
+                }
+                reload()
+                withContext(Dispatchers.Main.immediate) { search(searchText,searchAll,searchFilter) }
+                message(if(count==0)"所选范围没有可读取的照片，可调整范围或相册授权" else "照片已整理，去搜索回忆或切换日期看看")
+            } catch(e:CancellationException) { throw e }
+            catch(e:Exception) { mutable.update { it.copy(photoImportProgress=e.message ?: "照片导入未完成") };message(e.message ?: "照片导入未完成，请重试") }
+            finally { mutable.update { it.copy(photoImportBusy=false) } }
+        }
+    }
+    fun cancelPhotoImport() {
+        photoImportJob?.cancel()
+        mutable.update { it.copy(photoImportBusy=false,photoImportProgress="已停止导入，整理完成的回忆会保留") }
+        refresh(false)
+        search(searchText,searchAll,searchFilter)
+    }
     fun export(uri:Uri,archive:Boolean,json:Boolean=false)=action { g ->
         if(archive) { val code=BackupService(app,g.repo).export(uri);mutable.update { it.copy(recoveryCode=code) };message("加密备份已完成，请单独保存恢复码") }
         else { BackupService(app,g.repo).exportDay(uri,mutable.value.day ?: return@action,json);message("日摘要已导出") }
