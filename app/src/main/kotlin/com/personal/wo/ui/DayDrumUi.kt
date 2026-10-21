@@ -16,6 +16,10 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.*
 import com.personal.wo.core.*
@@ -29,7 +33,8 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun DayDrumHome(s:WoUiState,onChapter:(DayChapter)->Unit,statistics:()->Unit,
     refresh:()->Unit,setup:()->Unit,demo:(Boolean)->Unit,onDate:(LocalDate)->Unit={},
-    onThreshold:(Int)->Unit={},today:LocalDate=LocalDate.now(ZoneId.of(s.policy.archiveZone)),onAll:()->Unit={}) {
+    onThreshold:(Int)->Unit={},today:LocalDate=LocalDate.now(ZoneId.of(s.policy.archiveZone)),onAll:()->Unit={},
+    onSearch:()->Unit={},onImportPhotos:()->Unit=setup,onShare:()->Unit={},onCancelImport:()->Unit={}) {
     val day=s.day ?: return
     val date=LocalDate.parse(s.selectedDate)
     val projection=resolvedHomeProjection(s,day)
@@ -45,18 +50,21 @@ import kotlin.math.roundToInt
     val dark=MaterialTheme.colorScheme.background.luminance()<.15f
     TimelineAtmosphere(day,chapters,{pager.currentPage+pager.currentPageOffsetFraction},dark) {
     Column(Modifier.fillMaxSize().testTag("day-drum-home")) {
-        Row(Modifier.fillMaxWidth().padding(start=20.dp,end=8.dp,top=4.dp),verticalAlignment=Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(onClickLabel="选择日期"){calendar=true}.padding(4.dp),verticalArrangement=Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment=Alignment.CenterVertically) {
-                    Text("${date.year}年${date.monthValue}月${date.dayOfMonth}日",style=MaterialTheme.typography.titleLarge,modifier=Modifier.testTag("drum-date"))
-                    Icon(Icons.Outlined.ExpandMore,null,Modifier.size(20.dp))
+        val compactHeader=LocalConfiguration.current.screenHeightDp<520 || LocalDensity.current.fontScale>1.3f
+        Row(Modifier.fillMaxWidth().padding(start=24.dp,end=8.dp),verticalAlignment=Alignment.CenterVertically) {
+            Row(Modifier.weight(1f),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+                Surface(shape=CircleShape,color=WoMint) {
+                    Text("我",Modifier.padding(horizontal=10.dp,vertical=6.dp),color=Ink,fontWeight=FontWeight.Black,style=MaterialTheme.typography.titleMedium)
                 }
-                Text("星期${listOf("一","二","三","四","五","六","日")[date.dayOfWeek.value-1]} · ${if(s.demo)"虚构演示" else "这一天，慢慢回看"}",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if(s.demo)"生活胶片 · 虚构演示" else "生活胶片",style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold)
             }
+            IconButton(onClick=onSearch,modifier=Modifier.testTag("home-search")){Icon(Icons.Outlined.Search,"搜索回忆")}
             IconButton(onClick=statistics,enabled=day.dayDate==s.selectedDate){Icon(Icons.Outlined.BarChart,"一天统计")}
             Box {
                 IconButton(onClick={menu=true}){Icon(Icons.Outlined.MoreVert,"时间轴选项")}
                 EventCardTheme { DropdownMenu(menu,{menu=false}) {
+                    DropdownMenuItem(text={Text("分享这一天")},onClick={menu=false;onShare()},enabled=!s.demo&&day.dayDate==s.selectedDate,leadingIcon={Icon(Icons.Outlined.IosShare,null)})
+                    DropdownMenuItem(text={Text("导入最近30天照片")},onClick={menu=false;onImportPhotos()},enabled=!s.busy&&!s.photoImportBusy&&!s.demo,leadingIcon={Icon(Icons.Outlined.PhotoLibrary,null)})
                     DropdownMenuItem(text={Text("查看全部片段")},onClick={menu=false;onAll()},leadingIcon={Icon(Icons.Outlined.List,null)})
                     DropdownMenuItem(text={Text("应用显示门槛 · ${s.homeAppMinMinutes}分钟")},onClick={menu=false;filter=true},leadingIcon={Icon(Icons.Outlined.Tune,null)})
                     DropdownMenuItem(text={Text("更新记录")},onClick={menu=false;refresh()},enabled=!s.busy&&!s.demo,leadingIcon={Icon(Icons.Outlined.Refresh,null)})
@@ -64,23 +72,54 @@ import kotlin.math.roundToInt
                 } }
             }
         }
+        Row(Modifier.fillMaxWidth().padding(horizontal=24.dp).clip(RoundedCornerShape(16.dp))
+            .clickable(onClickLabel="选择日期"){calendar=true}.padding(vertical=if(compactHeader)0.dp else 2.dp),
+            verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(14.dp)) {
+            if(!compactHeader)Text(date.dayOfMonth.toString().padStart(2,'0'),fontSize=58.sp,lineHeight=62.sp,letterSpacing=(-3).sp,fontWeight=FontWeight.Light)
+            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                if(!compactHeader)Text(if(date==today)"今天，值得留住" else "翻开这一天",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis)
+                Row(verticalAlignment=Alignment.CenterVertically) {
+                    Text("${date.year}年${date.monthValue}月${date.dayOfMonth}日",style=MaterialTheme.typography.labelMedium,modifier=Modifier.testTag("drum-date"))
+                    Icon(Icons.Outlined.ExpandMore,null,Modifier.size(18.dp))
+                }
+                if(!compactHeader)Text("星期${listOf("一","二","三","四","五","六","日")[date.dayOfWeek.value-1]}  /  ${if(day.dayDate==s.selectedDate)"${chapters.size} 段经历" else "正在展开"}",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
             TextButton(onClick={onDate(date.minusDays(1))}){Icon(Icons.Outlined.ChevronLeft,null,Modifier.size(18.dp));Text("前一天")}
             TextButton(onClick={if(s.demo)demo(false);onDate(today)},enabled=date!=today||s.demo){Text(if(date==today&&!s.demo)"今天" else "回到今天")}
             TextButton(onClick={onDate(date.plusDays(1))},enabled=date<today){Text("后一天");Icon(Icons.Outlined.ChevronRight,null,Modifier.size(18.dp))}
         }
+        if(s.photoImportBusy) {
+            Row(Modifier.fillMaxWidth().padding(horizontal=24.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)
+                Text(s.photoImportProgress,Modifier.weight(1f),style=MaterialTheme.typography.labelMedium,maxLines=2,overflow=TextOverflow.Ellipsis)
+                TextButton(onClick=onCancelImport){Text("停止")}
+            }
+        }
         if(day.dayDate!=s.selectedDate) {
             Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
         } else if(chapters.isEmpty()) {
-            Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp),contentAlignment=Alignment.Center) {
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=24.dp,vertical=12.dp),
+                verticalArrangement=Arrangement.Center) {
                 EventCardTheme { Paper {
-                    IconTile(Icons.Outlined.Timeline,size=56)
-                    Text(if(recapEpisodes(day).isEmpty())"这一天，还没有留下片段" else "小片段，先收在这里",style=MaterialTheme.typography.headlineSmall)
-                    Muted("可以换个日期回看。留下的照片、活动和较长的应用时段，会在这条时间轴上浮现。")
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+                        IconTile(Icons.Outlined.PhotoLibrary,color=Color(0xFF28685A),size=56)
+                        Text("第一格 / 001",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(if(recapEpisodes(day).isEmpty())"从一张照片，\n打开这一天" else "小片段，先收在这里",style=MaterialTheme.typography.headlineMedium)
+                    Muted("照片、走过的地方、值得记住的时刻，会在这里连成你的一天。")
                     if(recapEpisodes(day).isNotEmpty())TextButton(onClick=onAll){Text("查看全部 ${recapEpisodes(day).size} 个片段")}
-                    TextButton(onClick=setup){Text("开启记录来源")}
-                    TextButton(onClick={demo(true)}){Text("转动示例看看")}
+                    Button(onClick=onImportPhotos,enabled=!s.photoImportBusy,modifier=Modifier.fillMaxWidth(),contentPadding=PaddingValues(16.dp)) {
+                        Icon(Icons.Outlined.AddPhotoAlternate,null,Modifier.size(20.dp));Spacer(Modifier.width(8.dp));Text("让照片成为回忆")
+                    }
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                        TextButton(onClick=setup){Text("开启记录来源")}
+                        TextButton(onClick={demo(true)}){Text("转动示例看看")}
+                    }
                 } }
+                Text("留在本机 · 随时回看",Modifier.fillMaxWidth().padding(top=18.dp),style=MaterialTheme.typography.labelSmall,
+                    color=MaterialTheme.colorScheme.onSurfaceVariant,textAlign=androidx.compose.ui.text.style.TextAlign.Center)
             }
         } else {
             DayDrum(day,chapters,pager,onChapter,onDate,today,Modifier.weight(1f),onAll)
@@ -162,7 +201,7 @@ import kotlin.math.roundToInt
                     }
                     IconButton(onClick={move(selected+1)},enabled=selected<chapters.size+1){Icon(Icons.Outlined.ChevronRight,"下一段经历")}
                 }
-                if(!wide)Text("左右转动 · 轻触展开这一段",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(!wide)Text("左右转动 · 轻触展开这一段",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 val length=(day.windowEndMs-day.windowStartMs).coerceAtLeast(1)
                 val fraction=((timelineTime(times,pager.currentPage+pager.currentPageOffsetFraction)-day.windowStartMs).toFloat()/length).coerceIn(0f,1f)
                 Slider(value=scrubbing ?: fraction,onValueChange={ value ->
@@ -178,6 +217,7 @@ import kotlin.math.roundToInt
                     scrubbing=null
                     if(value!=null)move(nearestChapter(chapters,day.windowStartMs+(length*value).toLong())+1)
                 },enabled=chapters.size>1,
+                    colors=SliderDefaults.colors(thumbColor=MaterialTheme.colorScheme.primary,activeTrackColor=MaterialTheme.colorScheme.primary,inactiveTrackColor=MaterialTheme.colorScheme.outlineVariant),
                     modifier=Modifier.fillMaxWidth().height(40.dp).testTag("day-time-scrubber").semantics {
                         contentDescription="一天的时间轴"
                         stateDescription=active?.part?.let{partRange(it,day.zoneId)} ?: "日期边界"

@@ -22,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.personal.wo.collector.Capabilities
 import com.personal.wo.collector.DirectPermissionPlan
 import com.personal.wo.collector.OptionalHealthPermissionContract
+import com.personal.wo.collector.PublicWelcomePlan
 import com.personal.wo.core.Source
 import com.personal.wo.ui.*
 import kotlinx.coroutines.launch
@@ -29,10 +30,25 @@ import kotlinx.coroutines.launch
 class MainActivity:ComponentActivity() {
     private lateinit var vm:WoViewModel
     private val unlocked=mutableStateOf(false)
+    private val welcomeVisible=mutableStateOf(false)
     private var stoppedAt=0L
     private var prompt:CancellationSignal?=null
     private var quickActive=false
     private var quickStages=ArrayDeque<Source>()
+    private val welcomePhotos=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        finishPhotoChoice()
+    }
+    private val photoSettings=registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        finishPhotoChoice()
+    }
+    private fun finishPhotoChoice() {
+        completeWelcome()
+        if(hasPhotoAccess()) vm.startPhotoJourney()
+        else {
+            vm.permissionsChanged()
+            vm.message("随时可以在记录权限中连接相册")
+        }
+    }
     private val permissions=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if(::vm.isInitialized) {
             if(quickActive)advanceQuickPermissions() else {
@@ -57,6 +73,10 @@ class MainActivity:ComponentActivity() {
     private val restoreUri=mutableStateOf<android.net.Uri?>(null)
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
+        val preferences=getSharedPreferences("ui",MODE_PRIVATE)
+        welcomeVisible.value=PublicWelcomePlan.shouldShow(
+            preferences.getBoolean("public_intro_v2",false),
+            preferences.getBoolean("direct_permissions_v2",false),null)
         quickActive=savedInstanceState?.getBoolean("quickActive") ?: false
         quickStages=ArrayDeque(savedInstanceState?.getStringArrayList("quickStages")?.mapNotNull { runCatching { Source.valueOf(it) }.getOrNull() } ?: emptyList())
         recoverableCall { enableEdgeToEdge() }.onFailure { wo().diagnostics.record("窗口适配",it) }
@@ -69,17 +89,43 @@ class MainActivity:ComponentActivity() {
         vm=created.getOrThrow()
         setContent {
             val state by vm.state.collectAsStateWithLifecycle()
-            ReportDrawnWhen { state.loaded&&state.startupError==null&&unlocked.value&&state.homeProjection!=null }
+            val showWelcome=welcomeVisible.value&&state.policy.startedMs==null
+            ReportDrawnWhen { state.loaded&&state.startupError==null&&unlocked.value&&(showWelcome||state.homeProjection!=null) }
             LaunchedEffect(state.loaded,state.policy.lockUi,state.startupError) { if(state.loaded&&state.startupError==null) { if(state.policy.lockUi&&stoppedAt==0L) { unlocked.value=false;authenticate() } else if(!state.policy.lockUi)unlocked.value=true } }
-            LaunchedEffect(state.loaded,state.sources.size,unlocked.value) {
-                if(state.loaded&&state.startupError==null&&unlocked.value&&state.sources.size==Source.entries.size&&
-                    !getSharedPreferences("ui",MODE_PRIVATE).getBoolean("direct_permissions_v2",false)) requestMissingPermissions()
+            LaunchedEffect(state.loaded,state.startupError,showWelcome) {
+                if(state.loaded&&state.startupError==null&&showWelcome) vm.preparePublicSetup()
             }
             WoTheme { if(state.startupError!=null) StartupFailureScreen(state.startupError!!,vm::retryStartup,{copyDiagnostic(state.startupError!!)})
             else if(!state.loaded) StartupLoadingScreen()
+            else if(unlocked.value&&showWelcome) WelcomeScreen(::requestPhotoJourney,::completeWelcome)
             else if(unlocked.value) WoAppUi(vm,{ authorize(it) },{ background() },{ kind -> when(kind) { "archive"->archive.launch("Wo_Backup.woarchive");"json"->summaryJson.launch("Wo_${state.selectedDate}.json");"restore"->openArchive.launch(arrayOf("*/*"));else->summary.launch("Wo_${state.selectedDate}.md") } },restoreUri.value,{restoreUri.value=null},{on->
                 if(on&&!getSystemService(KeyguardManager::class.java).isDeviceSecure)vm.message("请先设置手机系统锁屏，再开启查看锁") else vm.lock(on)
             }) else UnlockScreen { authenticate() } }
+        }
+    }
+    private fun completeWelcome() {
+        getSharedPreferences("ui",MODE_PRIVATE).edit().putBoolean("public_intro_v2",true).apply()
+        welcomeVisible.value=false
+    }
+    private fun hasPhotoAccess():Boolean=PublicWelcomePlan.photoPermissions(Build.VERSION.SDK_INT)
+        .any { Capabilities.granted(this,it) }
+    fun requestPhotoJourney() {
+        if(hasPhotoAccess()) {
+            completeWelcome()
+            vm.startPhotoJourney()
+        } else {
+            val wanted=PublicWelcomePlan.photoPermissions(Build.VERSION.SDK_INT)
+            val asked=getSharedPreferences("permission_requests",MODE_PRIVATE)
+            val blocked=wanted.filterNot { it==Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED }
+                .all { asked.getBoolean(it,false)&&!shouldShowRequestPermissionRationale(it) }
+            if(blocked) {
+                photoSettings.launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:$packageName")))
+                return
+            }
+            asked.edit().apply {
+                wanted.forEach { putBoolean(it,true) }
+            }.apply()
+            welcomePhotos.launch(wanted)
         }
     }
     override fun onSaveInstanceState(outState:Bundle) {
@@ -141,7 +187,7 @@ class MainActivity:ComponentActivity() {
         val ordinary=when(source) {
             Source.LOCATION->arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION)
             Source.STEPS->arrayOf(Manifest.permission.ACTIVITY_RECOGNITION)
-            Source.PHOTO->if(Build.VERSION.SDK_INT>=34)arrayOf(Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO,Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) else if(Build.VERSION.SDK_INT>=33)arrayOf(Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO) else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            Source.PHOTO->PublicWelcomePlan.photoPermissions(Build.VERSION.SDK_INT)
             Source.CALENDAR->arrayOf(Manifest.permission.READ_CALENDAR)
             else->emptyArray()
         }

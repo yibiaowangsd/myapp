@@ -17,11 +17,13 @@ import com.personal.wo.core.*
 import java.time.*
 import java.time.format.DateTimeFormatter
 
-val Ink = Color(0xFF27273F)
-val Violet = Color(0xFF6251C7)
-val laneColors = listOf(Color(0xFF277767), Color(0xFFBD682C), Violet, Color(0xFFB15177))
+val Ink = Color(0xFF172620)
+val WoMint = Color(0xFFB9F3CA)
+val WoPaper = Color(0xFFF5F3EC)
+val Violet = Color(0xFF28685A) // Kept as a source-compatible accent for older screens.
+val laneColors = listOf(Color(0xFF28685A), Color(0xFFB46734), Color(0xFF596D96), Color(0xFFA4586A))
 @Composable fun laneTint(lane:Lane):Color = if(MaterialTheme.colorScheme.background.luminance()<.15f)
-    listOf(Color(0xFF90D5C4),Color(0xFFFFBE8F),Color(0xFFC8BCFF),Color(0xFFF0ACCA))[lane.ordinal]
+    listOf(Color(0xFFB9F3CA),Color(0xFFF8C793),Color(0xFFAAC5E8),Color(0xFFF2B9C4))[lane.ordinal]
     else laneColors[lane.ordinal]
 fun laneName(l: Lane) = listOf("足迹", "活动", "应用", "生活")[l.ordinal]
 fun assertionName(a: Assertion) = listOf("来源记录", "根据记录推测", "已确认", "计划", "信息不足")[a.ordinal]
@@ -43,25 +45,29 @@ fun sourceIcon(s: Source): ImageVector = when(s) {
     Source.CALENDAR -> Icons.Outlined.DateRange
 }
 @Composable fun WoTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val light = lightColorScheme(primary=Violet, onPrimary=Color.White,
-        primaryContainer=Color(0xFFEEEAFB), onPrimaryContainer=Color(0xFF43338F),
-        background=Color(0xFFF6F6FA), onBackground=Ink, surface=Color.White, onSurface=Ink,
-        surfaceVariant=Color(0xFFEDEDF4), onSurfaceVariant=Color(0xFF69697D), outline=Color(0xFF8C8C9B),
-        outlineVariant=Color(0xFFE3E3ED), secondary=Color(0xFF277767))
-    val night = darkColorScheme(primary=Color(0xFFC8BCFF), onPrimary=Color(0xFF302264),
-        primaryContainer=Color(0xFF382F60), onPrimaryContainer=Color(0xFFE4DCFF),
-        background=Color(0xFF16161F), onBackground=Color(0xFFF0EFF7), surface=Color(0xFF22222F),
-        onSurface=Color(0xFFF0EFF7), surfaceVariant=Color(0xFF30303E), onSurfaceVariant=Color(0xFFB7B6C8),
-        outline=Color(0xFF8B899D), outlineVariant=Color(0xFF3A394B), secondary=Color(0xFF90D5C4))
+    val light = lightColorScheme(primary=Ink, onPrimary=WoPaper,
+        primaryContainer=WoMint, onPrimaryContainer=Ink,
+        background=WoPaper, onBackground=Ink, surface=Color(0xFFFFFEF9), onSurface=Ink,
+        surfaceVariant=Color(0xFFEAECE2), onSurfaceVariant=Color(0xFF5B685F), outline=Color(0xFF7C8B80),
+        outlineVariant=Color(0xFFDEE3D8), secondary=Color(0xFF28685A), secondaryContainer=Color(0xFFDDEADE),
+        onSecondaryContainer=Ink, surfaceContainer=Color(0xFFF0F0E7))
+    val night = darkColorScheme(primary=WoMint, onPrimary=Ink,
+        primaryContainer=Color(0xFF244635), onPrimaryContainer=WoMint,
+        background=Color(0xFF101914), onBackground=Color(0xFFF5F3E9), surface=Color(0xFF1B2921),
+        onSurface=Color(0xFFF5F3E9), surfaceVariant=Color(0xFF293B30), onSurfaceVariant=Color(0xFFB6C4B9),
+        outline=Color(0xFF84968A), outlineVariant=Color(0xFF34483A), secondary=Color(0xFFB9F3CA),
+        secondaryContainer=Color(0xFF293F31), onSecondaryContainer=WoMint, surfaceContainer=Color(0xFF202F26))
     MaterialTheme(colorScheme=if(dark)night else light, typography=Typography(
-        headlineLarge=TextStyle(fontSize=30.sp, lineHeight=39.sp, fontWeight=FontWeight.Bold),
+        displayLarge=TextStyle(fontSize=64.sp,lineHeight=68.sp,fontWeight=FontWeight.Light,letterSpacing=(-3).sp),
+        headlineLarge=TextStyle(fontSize=32.sp, lineHeight=41.sp, fontWeight=FontWeight.Bold,letterSpacing=(-.6).sp),
         headlineMedium=TextStyle(fontSize=26.sp, lineHeight=34.sp, fontWeight=FontWeight.Bold),
         headlineSmall=TextStyle(fontSize=22.sp, lineHeight=30.sp, fontWeight=FontWeight.Bold),
         titleLarge=TextStyle(fontSize=20.sp, lineHeight=28.sp, fontWeight=FontWeight.SemiBold),
         titleMedium=TextStyle(fontSize=16.sp, lineHeight=24.sp, fontWeight=FontWeight.SemiBold),
         bodyLarge=TextStyle(fontSize=16.sp, lineHeight=25.sp),
         bodyMedium=TextStyle(fontSize=14.sp, lineHeight=22.sp),
-        labelLarge=TextStyle(fontSize=14.sp, lineHeight=20.sp, fontWeight=FontWeight.Medium)),content=content)
+        labelLarge=TextStyle(fontSize=14.sp, lineHeight=20.sp, fontWeight=FontWeight.Medium)),
+        shapes=Shapes(small=RoundedCornerShape(12.dp),medium=RoundedCornerShape(18.dp),large=RoundedCornerShape(26.dp),extraLarge=RoundedCornerShape(32.dp)),content=content)
 }
 @Composable fun Muted(text: String, modifier: Modifier = Modifier) {
     Text(text, modifier, style=MaterialTheme.typography.bodyMedium, color=MaterialTheme.colorScheme.onSurfaceVariant)
@@ -73,7 +79,7 @@ fun sourceIcon(s: Source): ImageVector = when(s) {
     }
 }
 @Composable fun Paper(modifier: Modifier=Modifier, content: @Composable ColumnScope.()->Unit) {
-    Surface(modifier.fillMaxWidth(),shape=RoundedCornerShape(24.dp),color=MaterialTheme.colorScheme.surface) {
+    Surface(modifier.fillMaxWidth(),shape=RoundedCornerShape(24.dp),color=MaterialTheme.colorScheme.surface,border=BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant.copy(alpha=.6f))) {
         Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp),content=content)
     }
 }

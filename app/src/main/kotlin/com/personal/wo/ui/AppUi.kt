@@ -13,6 +13,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.platform.LocalContext
@@ -29,6 +31,7 @@ import java.time.format.DateTimeFormatter
 
 @Composable fun WoAppUi(vm:WoViewModel,authorize:(Source)->Unit,background:()->Unit,export:(String)->Unit,restoreUri:Uri?,clearUri:()->Unit,lock:(Boolean)->Unit) {
     val context=LocalContext.current
+    val shareScope=rememberCoroutineScope()
     val s by vm.state.collectAsStateWithLifecycle();var tab by key("main-tab-v170") { rememberSaveable { mutableIntStateOf(0) } };var page by rememberSaveable { mutableStateOf("") };var parent by rememberSaveable { mutableStateOf("") }
     var dayParent by rememberSaveable { mutableStateOf("") }
     var setupParent by rememberSaveable { mutableStateOf("") }
@@ -64,7 +67,7 @@ import java.time.format.DateTimeFormatter
                     "connections"->ConnectionsPage(s,authorize,vm::source,vm::appIncluded,vm::appNotices,vm::loadApps,{setup()},vm::reconnectSteps,{vm.message(it)},vm::revokeHuawei,vm::permissionsChanged)
                     "setup"->PermissionCenter(s,authorize,vm::source,background,{(context as? MainActivity)?.requestStatusNotification()},{if(s.policy.requested&&!s.policy.paused)vm.refresh() else vm.recording(if(s.policy.paused)"resume" else "start")},{(context as? MainActivity)?.requestHealthBackground()},{(context as? MainActivity)?.requestMissingPermissions()},vm::reconnectSteps)
                     "insights"->InsightPage(s)
-                    "search"->SearchPage(s,vm,::open)
+                    "search"->MemorySearchPage(s,vm,::open)
                     "episode"->EpisodePage(s,vm,::back)
                     "day"->TimelinePage(s,{vm.date(it)},::open)
                     "chapter"->s.day?.let { day ->
@@ -73,7 +76,7 @@ import java.time.format.DateTimeFormatter
                     }
                     "summary"->DayStatisticsPage(s,::all,{val step=s.sources.firstOrNull{it.source==Source.STEPS};if(sourceReady(step))vm.reconnectSteps() else {vm.source(Source.STEPS,true);authorize(Source.STEPS)}},::open)
                     else->when(tab){
-                        0->DayDrumHome(s,{chapterId=it.id;page="chapter"},{page="summary"},{vm.refresh()},{setup()},{vm.demo(it)},vm::date,vm::homeAppMinutes,onAll=::all)
+                        0->DayDrumHome(s,{chapterId=it.id;page="chapter"},{page="summary"},{vm.refresh()},{setup()},{vm.demo(it)},vm::date,vm::homeAppMinutes,onAll=::all,onSearch={page="search"},onImportPhotos={if(sourceReady(s.sources.firstOrNull{it.source==Source.PHOTO}))vm.importPhotos(30) else (context as? MainActivity)?.requestPhotoJourney()},onCancelImport=vm::cancelPhotoImport,onShare={s.day?.let { day->shareScope.launch { runCatching { DayMemoryShare.share(context,day,s.homeAppMinMinutes) }.onFailure { vm.message("分享图片生成失败，请重试") } } }})
                         1->AchievementsPage(s.copy(achievements=awards.snapshot,achievementsLoading=awards.loading,achievementError=awards.error),
                             achievements::create,achievements::delete,achievements::reading,achievements::showcase,achievements::seen,achievements::refresh,vm::loadApps,
                             {vm.date(it);tab=0;page=""})
@@ -94,10 +97,18 @@ import java.time.format.DateTimeFormatter
 internal val mainPageTitles=listOf("首页","成就","设置")
 
 @Composable fun AppNavigation(selected: Int, onSelect: (Int)->Unit) {
-    NavigationBar(containerColor=MaterialTheme.colorScheme.surface,tonalElevation=0.dp) {
-        val icons=listOf(Icons.Outlined.Home,Icons.Outlined.EmojiEvents,Icons.Outlined.Settings)
-        mainPageTitles.forEachIndexed { i,label ->
-            NavigationBarItem(selected=selected==i,onClick={onSelect(i)},icon={Icon(icons[i],null)},label={Text(label)},colors=NavigationBarItemDefaults.colors(selectedIconColor=MaterialTheme.colorScheme.primary,selectedTextColor=MaterialTheme.colorScheme.primary,indicatorColor=MaterialTheme.colorScheme.primaryContainer))
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal=16.dp,vertical=8.dp)) {
+        NavigationBar(modifier=Modifier.clip(RoundedCornerShape(28.dp)).height(70.dp),
+            containerColor=MaterialTheme.colorScheme.surface,tonalElevation=0.dp,windowInsets=WindowInsets(0,0,0,0)) {
+            val icons=listOf(Icons.Outlined.Home,Icons.Outlined.EmojiEvents,Icons.Outlined.Settings)
+            mainPageTitles.forEachIndexed { i,label ->
+                NavigationBarItem(selected=selected==i,onClick={onSelect(i)},
+                    icon={Icon(icons[i],null,Modifier.size(23.dp))},
+                    label={Text(label,fontWeight=if(selected==i)FontWeight.Bold else FontWeight.Normal)},
+                    colors=NavigationBarItemDefaults.colors(selectedIconColor=Ink,selectedTextColor=MaterialTheme.colorScheme.onSurface,
+                        indicatorColor=WoMint,unselectedIconColor=MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor=MaterialTheme.colorScheme.onSurfaceVariant))
+            }
         }
     }
 }

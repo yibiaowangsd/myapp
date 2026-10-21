@@ -47,3 +47,12 @@ jobs:
             app/build/ui-previews/
             app/build/drum-frames/
           if-no-files-found: ignore
+      - name: Preserve installable debug and release build outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-builds
+          path: |
+            app/build/outputs/apk/personalEnhanced/release/*.apk
+            app/build/outputs/apk/personalEnhanced/debug/*.apk
+            app/build/outputs/mapping/personalEnhancedRelease/mapping.txt
+          if-no-files-found: error
