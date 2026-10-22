@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.*
 import com.personal.wo.BuildConfig
 import com.personal.wo.core.*
@@ -202,7 +203,7 @@ import java.time.*
     var endpoint by rememberSaveable{mutableStateOf("")}
     var model by rememberSaveable{mutableStateOf("")}
     var apiKey by remember{mutableStateOf("")}
-    LazyColumn(verticalArrangement=Arrangement.spacedBy(16.dp),contentPadding=PaddingValues(bottom=28.dp)) {
+    LazyColumn(modifier=Modifier.testTag("settings-page"),verticalArrangement=Arrangement.spacedBy(16.dp),contentPadding=PaddingValues(bottom=28.dp)) {
         item {
             Text("按你的方式，\n留下生活。",style=MaterialTheme.typography.headlineLarge)
             Muted("记录什么、什么时候暂停，都由你决定。",Modifier.padding(top=10.dp))

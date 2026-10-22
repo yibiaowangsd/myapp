@@ -11,18 +11,33 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class StartupAndTimelineBenchmark {
     @get:Rule val rule=MacrobenchmarkRule()
-    @Before fun prepare()=prepareTestApp()
+    @Before fun reset()=resetTestApp()
+    @Test fun firstRunStartup()=rule.measureRepeated(packageName=PACKAGE,
+        metrics=listOf(StartupTimingMetric()),iterations=10,startupMode=StartupMode.COLD,
+        compilationMode=CompilationMode.Partial(),setupBlock={resetTestApp();pressHome()}) {
+        // No pre-launch or welcome dismissal: database creation is part of this launch.
+        startActivityAndWait();waitForWelcome()
+    }
     @Test fun coldStartup()=startup(StartupMode.COLD)
     @Test fun warmStartup()=startup(StartupMode.WARM)
-    private fun startup(mode:StartupMode)=rule.measureRepeated(packageName=PACKAGE,
-        metrics=listOf(StartupTimingMetric()),iterations=10,startupMode=mode,
-        compilationMode=CompilationMode.Partial(),setupBlock={pressHome()}) {
-        startActivityAndWait();waitForHome()
+    private fun startup(mode:StartupMode) {
+        prepareTestApp()
+        rule.measureRepeated(packageName=PACKAGE,
+            metrics=listOf(StartupTimingMetric()),iterations=10,startupMode=mode,
+            compilationMode=CompilationMode.Partial(),setupBlock={pressHome()}) {
+            startActivityAndWait();waitForHome()
+        }
     }
-    @Test fun timelineFrames()=rule.measureRepeated(packageName=PACKAGE,
-        metrics=listOf(FrameTimingMetric()),iterations=5,compilationMode=CompilationMode.Partial(),
-        setupBlock={startActivityAndWait();openDemo()}) { turnTimeline() }
-    @Test fun datesAndTabs()=rule.measureRepeated(packageName=PACKAGE,
-        metrics=listOf(FrameTimingMetric()),iterations=5,compilationMode=CompilationMode.Partial(),
-        setupBlock={startActivityAndWait();openDemo()}) { changeDateAndTabs() }
+    @Test fun timelineFrames() {
+        prepareTestApp()
+        rule.measureRepeated(packageName=PACKAGE,
+            metrics=listOf(FrameTimingMetric()),iterations=5,compilationMode=CompilationMode.Partial(),
+            setupBlock={startActivityAndWait();openDemo()}) { turnTimeline() }
+    }
+    @Test fun datesAndTabs() {
+        prepareTestApp()
+        rule.measureRepeated(packageName=PACKAGE,
+            metrics=listOf(FrameTimingMetric()),iterations=5,compilationMode=CompilationMode.Partial(),
+            setupBlock={startActivityAndWait();openDemo()}) { changeDateAndTabs() }
+    }
 }

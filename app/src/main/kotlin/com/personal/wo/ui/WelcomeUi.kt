@@ -22,6 +22,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,7 +34,7 @@ private val welcomeLime = WoMint
 
 @Composable
 fun WelcomeScreen(onPhotos: () -> Unit, onSkip: () -> Unit) {
-    Surface(modifier = Modifier.fillMaxSize(), color = welcomeInk) {
+    Surface(modifier = Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }, color = welcomeInk) {
         Column(
             Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState())
                 .padding(horizontal = 28.dp, vertical = 20.dp).testTag("public-welcome")

@@ -1,6 +1,17 @@
 name: Performance profile journeys
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'core/**'
+      - 'benchmark/**'
+      - 'gradle/**'
+      - '*gradle*'
+      - 'scripts/*profiles*'
+      - 'scripts/verify_performance_results.py'
+      - '.github/workflows/performance-profiles.yml'
   pull_request:
     paths:
       - 'app/**'
@@ -8,6 +19,8 @@ on:
       - 'benchmark/**'
       - 'gradle/**'
       - '*gradle*'
+      - 'scripts/*profiles*'
+      - 'scripts/verify_performance_results.py'
       - '.github/workflows/performance-profiles.yml'
 permissions:
   contents: read
@@ -17,7 +30,7 @@ concurrency:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,12 +46,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Install compile SDK
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Test profile import contract
+        run: python3 -m unittest discover -s scripts -p 'test_import_profiles.py'
       - name: Enable emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Capture startup and interaction profiles
+      - name: Capture profiles and measure startup and interactions
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -46,9 +61,16 @@ jobs:
           arch: x86_64
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew --no-daemon --no-parallel --max-workers=1 -Pwo.benchmarks=true -Pwo.profileGeneration=true :benchmark:connectedPersonalOfflineBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.personal.wo.benchmark.BaselineProfileGenerator
-      - name: Import collected app rules
-        run: python3 scripts/import_profiles.py benchmark/build/outputs
+          # Only the emulator hardware warning is suppressed. No test is skipped and
+          # a required embedded Baseline Profile must still install successfully.
+          script: |
+            ./gradlew --no-daemon --no-parallel --max-workers=1 -Pwo.benchmarks=true -Pwo.profileGeneration=true :benchmark:connectedPersonalOfflineBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.personal.wo.benchmark.BaselineProfileGenerator
+            mkdir -p performance-results/profile-generation
+            cp -R benchmark/build/outputs benchmark/build/reports performance-results/profile-generation/
+            python3 scripts/import_profiles.py benchmark/build/outputs
+            ./gradlew --no-daemon --no-parallel --max-workers=1 -Pwo.benchmarks=true :benchmark:connectedPersonalOfflineBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.personal.wo.benchmark.StartupAndTimelineBenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR
+      - name: Verify every journey and packaged profiles
+        run: python3 scripts/verify_performance_results.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -58,4 +80,6 @@ jobs:
             app/src/main/baselineProfiles/startup-prof.txt
             benchmark/build/outputs/
             benchmark/build/reports/
+            performance-results/
+            app/build/outputs/apk/personalOffline/benchmark/
           if-no-files-found: error

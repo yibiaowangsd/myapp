@@ -10,11 +10,21 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class BaselineProfileGenerator {
     @get:Rule val rule=BaselineProfileRule()
-    @Before fun prepare()=prepareTestApp()
-    @Test fun startup()=rule.collect(packageName=PACKAGE,includeInStartupProfile=true) {
-        pressHome();startActivityAndWait();waitForHome()
+    @Before fun reset()=resetTestApp()
+    @Test fun firstRunStartup()=rule.collect(packageName=PACKAGE,includeInStartupProfile=true) {
+        // Leave welcome uncompleted so every collection iteration follows first-run UI.
+        pressHome();startActivityAndWait();waitForWelcome()
     }
-    @Test fun timelineDatesAndAchievements()=rule.collect(packageName=PACKAGE,includeInStartupProfile=false) {
+    @Test fun startup() {
+        prepareTestApp()
+        rule.collect(packageName=PACKAGE,includeInStartupProfile=true) {
+        pressHome();startActivityAndWait();waitForHome()
+        }
+    }
+    @Test fun timelineDatesAndAchievements() {
+        prepareTestApp()
+        rule.collect(packageName=PACKAGE,includeInStartupProfile=false) {
         startActivityAndWait();openDemo();turnTimeline();changeDateAndTabs()
+        }
     }
 }
