@@ -53,8 +53,11 @@ def main():
             required = ('timeToInitialDisplayMs', 'timeToFullDisplayMs') if 'Startup' in name else ('frameDurationCpuMs',)
             for metric in required:
                 values = metrics[metric]
-                assert values['runs'], (name, metric, 'no measurements')
-                print(f"{name}: {metric} median={values['median']}")
+                assert len(values['runs']) == expected[name], (name, metric, 'missing iterations')
+                assert all(run if isinstance(run, list) else run >= 0 for run in values['runs']), (name, metric, 'empty measurements')
+                median = values.get('median', values.get('P50'))
+                assert median is not None, (name, metric, 'missing median/P50')
+                print(f"{name}: {metric} median={median}")
             measured[name] = metrics
     assert set(measured) == set(expected), ('Missing metric JSON', set(expected) - set(measured))
 
