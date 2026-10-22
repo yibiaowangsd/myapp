@@ -23,6 +23,7 @@ import java.time.format.DateTimeFormatter
 
 @Composable fun SharedDataPage(demo:Boolean,vm:SharedDataViewModel=viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { vm.refresh() }
     SharedDataSettings(s,demo,vm::saveAndSync,vm::sync,vm::pause)
 }
 

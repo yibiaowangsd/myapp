@@ -18,12 +18,11 @@ class SharedDataViewModel(application:Application):AndroidViewModel(application)
     private val app=application as WoApplication
     private val mutable=MutableStateFlow(SharedDataUiState())
     val state=mutable.asStateFlow()
-    init { refresh() }
     private suspend fun refreshState(service:SharedDataSync) {
         val config=service.config();val status=service.status()
         mutable.update { it.copy(loaded=true,repository=config.repository,enabled=config.enabled,hasToken=config.token.isNotBlank(),status=status) }
     }
-    fun refresh() { viewModelScope.launch(Dispatchers.IO) {
+    fun refresh() { if(mutable.value.busy)return;viewModelScope.launch(Dispatchers.IO) {
         try { refreshState(app.graph().sharedData) }
         catch(e:CancellationException) { throw e }
         catch(e:Exception) { mutable.update { it.copy(loaded=true,error="配置暂时无法读取，请重试") } }
