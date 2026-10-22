@@ -24,7 +24,7 @@ import javax.net.ssl.HttpsURLConnection
 }
 data class SharedSyncStatus(val lastSuccessMs:Long=0,val days:Int=0,val pending:Int=0,val message:String="尚未同步")
 
-class GitHubSharedFiles(private val config:SharedSyncConfig,private val active:()->Boolean={true}):SharedFileStore {
+class GitHubSharedFiles(private val config:SharedSyncConfig,private val active:suspend()->Boolean={true}):SharedFileStore {
     private val base="https://api.github.com/repos/${config.checked().repository}"
     private suspend fun request(method:String,path:String,body:JsonObject?=null,missing:Boolean=false):JsonObject? {
         currentCoroutineContext().ensureActive();check(active()) { "同步配置已变化，本次同步停止" }
@@ -60,7 +60,7 @@ class GitHubSharedFiles(private val config:SharedSyncConfig,private val active:(
         require(metadata["private"]?.jsonPrimitive?.booleanOrNull==true) { "只允许同步到私有仓库；当前仓库不是私有仓库，未上传个人记录" }
     }
     private fun route(path:String):String {
-        require(path=="wo/index.json"||path.matches(Regex("wo/days/[0-9]{4}-[0-9]{2}-[0-9]{2}\\.json")))
+        require(path in setOf("wo/index.json","wo/memory.json")||path.matches(Regex("wo/days/[0-9]{4}-[0-9]{2}-[0-9]{2}\\.json")))
         return "/contents/$path"
     }
     private suspend fun file(path:String):JsonObject?=request("GET",route(path),missing=true)
@@ -103,11 +103,12 @@ class SharedDataSync(private val repo:WoRepository) {
     suspend fun sync():SharedSyncStatus=mutex.withLock {
         val selectedConfig=config();if(!selectedConfig.enabled)return@withLock status()
         val generation=repo.cachedPolicy.generation
+        val memory=LifeMemoryStore(repo).read()
         val zone=ZoneId.of(repo.cachedPolicy.archiveZone);val today=LocalDate.now(zone)
         repo.currentDay(today)
         val dates=(repo.db.dao().summaryDates(zone.id)+repo.dirtyDays().map { it.toString() }).distinct().sortedDescending()
-        val files=GitHubSharedFiles(selectedConfig) { config()==selectedConfig&&repo.cachedPolicy.generation==generation }
-        val result=SharedDataPublisher(files).publish(dates,zone.id,{date->repo.currentDay(LocalDate.parse(date))})
+        val files=GitHubSharedFiles(selectedConfig) { config()==selectedConfig&&repo.cachedPolicy.generation==generation&&LifeMemoryStore(repo).read().revision==memory.revision }
+        val result=SharedDataPublisher(files).publish(dates,zone.id,{date->repo.currentDay(LocalDate.parse(date))},memory=memory)
         val now=System.currentTimeMillis()
         val status=SharedSyncStatus(now,result.total,result.pending,if(result.pending==0)"已同步到私有仓库" else "已同步 ${result.total} 天，另有 ${result.pending} 天待同步")
         repo.db.dao().putMeta(MetaRow("shared-sync.status",buildJsonObject {

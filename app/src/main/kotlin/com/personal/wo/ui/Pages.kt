@@ -193,7 +193,7 @@ import java.time.*
         dismissButton={TextButton(onClick={delete=false}){Text("取消")}})
 }
 
-@Composable fun SettingsPage(s:WoUiState,vm:WoViewModel,export:(String)->Unit,lock:(Boolean)->Unit,permissions:()->Unit,connections:()->Unit,insights:()->Unit,demo:()->Unit,onDataLink:()->Unit={}) {
+@Composable fun SettingsPage(s:WoUiState,vm:WoViewModel,export:(String)->Unit,lock:(Boolean)->Unit,permissions:()->Unit,connections:()->Unit,insights:()->Unit,demo:()->Unit,onDataLink:()->Unit={},onDeepSeek:()->Unit={}) {
     val context=LocalContext.current
     var delete by remember{mutableStateOf(false)}
     var timeExclude by remember{mutableStateOf(false)}
@@ -221,7 +221,10 @@ import java.time.*
             }
         }
         item{SettingsShortcuts(permissions,connections,insights)}
-        item{Paper{SettingsShortcut(Icons.Outlined.CloudSync,"数据互通","同步记录，让 ChatGPT 在这里读取",onDataLink)}}
+        item{Paper{
+            SettingsShortcut(Icons.Outlined.CloudSync,"数据互通","同步记录与记忆，让 ChatGPT 在这里读取",onDataLink)
+            SettingsShortcut(Icons.Outlined.AutoAwesome,"DeepSeek 与记忆","结合历史记录和偏好生成回顾",onDeepSeek)
+        }}
         item {
             Section("数据与隐私")
             Paper {

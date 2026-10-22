@@ -26,6 +26,7 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
     private fun dayKey(date:LocalDate,zone:String)="day.snapshot.v1:$zone:$date"
     private fun snapshotPolicy()="v2:${cachedPolicy.generation}:${config.version}"
     private fun notifyChange() { changes.value += 1 }
+    internal fun memoryChanged() { notifyChange() }
     private suspend fun invalidateDays(start:Long,end:Long,neighbors:Boolean=true) {
         val zone=ZoneId.of(cachedPolicy.archiveZone)
         val padding=if(neighbors)1L else 0L
@@ -75,7 +76,13 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
         }
         notifyChange()
     }
-    suspend fun configure(transform: (Policy) -> Policy) = mutex.withLock { db.withTransaction { savePolicy(transform(cachedPolicy).copy(generation=cachedPolicy.generation+1)) }; notifyChange() }
+    suspend fun configure(transform: (Policy) -> Policy) = mutex.withLock {
+        db.withTransaction {
+            val old=cachedPolicy;val next=transform(old).copy(generation=old.generation+1)
+            if(old.archiveZone!=next.archiveZone||old.enabledSources!=next.enabledSources||old.exclusions!=next.exclusions||old.excludedApps!=next.excludedApps||old.noticeApps!=next.noticeApps)dao.invalidateLifeMemory()
+            savePolicy(next)
+        };notifyChange()
+    }
     suspend fun sources(): List<SourceState> = dao.sources().map { WoJson.decodeFromString(it.json) }
     suspend fun source(source: Source): SourceState = sources().firstOrNull { it.source==source } ?: SourceState(source)
     suspend fun state(state: SourceState) = mutex.withLock {
@@ -131,6 +138,12 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
         val removed=replaced.filter { it.id !in incomingIds }
         db.withTransaction {
             if(full)dao.putOperation(OperationRow("storage-budget",System.currentTimeMillis(),"D001_STORAGE_BUDGET",batch.size.toLong()))
+            val corrected=(removed+changed.mapNotNull { prior[it.id] }).map { Span(it.startMs,it.endMs) }+
+                changed.filter { it.startMs<window(LocalDate.now(ZoneId.of(p.archiveZone)),ZoneId.of(p.archiveZone)).start }.map { Span(it.startMs,it.endMs) }
+            if(corrected.isNotEmpty())dao.invalidateLifeMemory { date ->
+                val day=window(LocalDate.parse(date),ZoneId.of(p.archiveZone))
+                corrected.any { it.start<day.end&&it.end>=day.start }
+            }
             if(full&&resourceStop==null)savePolicy(p.copy(generation=p.generation+1,exclusions=p.exclusions+Exclusion("resource-${System.currentTimeMillis()}",System.currentTimeMillis(),reason="RESOURCE_LIMIT")))
             if(removed.isNotEmpty())dao.deleteObservations(removed.map { it.id })
             if(changed.isNotEmpty())dao.putObservations(changed.map { ObservationRow(it.id,it.source.name,it.sourceKey,it.kind.name,it.startMs,it.endMs,it.receivedMs,WoJson.encodeToString(it)) })
@@ -178,6 +191,7 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
         }
         if(raw.isEmpty()&&episodes.isEmpty()&&summaries.isEmpty())return@withLock
         db.withTransaction {
+            dao.invalidateLifeMemory()
             dao.deleteObservations(raw.map { it.id })
             val ids=episodes.map { it.id }
             ids.forEach { dao.removeIndex(it);dao.clearEvidence(it) }
@@ -200,7 +214,7 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
     suspend fun namePlace(e: Episode,name: String) = mutex.withLock {
         require(e.lat!=null && e.lon!=null && name.isNotBlank())
         val place = Place(stableId("place",e.lat,e.lon),name.take(80),e.lat!!,e.lon!!)
-        db.withTransaction { dao.putPlace(PlaceRow(place.id,WoJson.encodeToString(place)));invalidateAllDays() }; notifyChange()
+        db.withTransaction { dao.putPlace(PlaceRow(place.id,WoJson.encodeToString(place)));invalidateAllDays();dao.invalidateLifeMemory() }; notifyChange()
     }
     private suspend fun saveEpisode(e: Episode) {
         val text="${e.title} ${e.detail} ${e.packageName}".lowercase()
@@ -277,6 +291,7 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
         val s=start ?: current.startMs; val t=end ?: current.endMs; require(t>=s)
         val a=Annotation(UUID.randomUUID().toString(),e.id,e.revision,title?.take(256),start,end,favorite,confirmed)
         db.withTransaction {
+            dao.invalidateLifeMemory()
             dao.putAnnotation(AnnotationRow(a.id,a.episodeId,System.currentTimeMillis(),WoJson.encodeToString(a)))
             saveEpisode(current.copy(revision=current.revision+1,title=title ?: current.title,startMs=s,endMs=t,assertion=if(confirmed) Assertion.CONFIRMED else current.assertion,isFavorite=favorite ?: current.isFavorite))
             val z=ZoneId.of(cachedPolicy.archiveZone); val from=Instant.ofEpochMilli(minOf(s,current.startMs)).atZone(z).toLocalDate(); val to=Instant.ofEpochMilli(maxOf(t,current.endMs)).atZone(z).toLocalDate()
@@ -290,7 +305,7 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
             invalidateDays(minOf(s,current.startMs),maxOf(t,current.endMs)+1)
         }; notifyChange(); a.id
     }
-    suspend fun undoAnnotation(id:String)=mutex.withLock { db.withTransaction { dao.undoAnnotation(id);invalidateAllDays() }; notifyChange() }
+    suspend fun undoAnnotation(id:String)=mutex.withLock { db.withTransaction { dao.undoAnnotation(id);invalidateAllDays();dao.invalidateLifeMemory() }; notifyChange() }
     suspend fun preview(start:Long,end:Long,id:String?=null): DeletionPreview = mutex.withLock {
         require(end>start); DeletionPreview(cachedPolicy.generation,start,end,if(id!=null) 1 else dao.episodes(start,end).size,dao.observationCount(start,end),id)
     }
@@ -300,6 +315,7 @@ class WoRepository(val db: WoDatabase, val vault: KeyVault, val config: EngineCo
         val eps=rows.map { WoJson.decodeFromString<Episode>(it.json) }; val ids=eps.map { it.id }; val p=cachedPolicy
         db.withTransaction {
             val xs=if(preview.id==null) listOf(Exclusion(UUID.randomUUID().toString(),preview.startMs,preview.endMs,reason="DELETE")) else eps.flatMap { e -> e.evidence.map { v -> Exclusion(UUID.randomUUID().toString(),0,null,v.source,sourceKey=v.sourceKey,reason="DELETE_EPISODE") } }
+            dao.invalidateLifeMemory()
             savePolicy(p.copy(generation=p.generation+1,exclusions=p.exclusions+xs))
             val rawIds=if(preview.id==null) dao.observations(preview.startMs,preview.endMs).map { it.id } else eps.flatMap { it.evidence }.map { it.id }
             dao.deleteObservations(rawIds); ids.forEach { dao.removeIndex(it) }; dao.deleteRelations(ids); dao.deleteAnnotations(ids); dao.deleteEpisodes(ids)

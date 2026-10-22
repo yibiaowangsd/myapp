@@ -51,7 +51,7 @@ import java.time.format.DateTimeFormatter
     fun open(e:Episode) { parent=page;page="episode";vm.episode(e.id) }
     fun all() { dayParent=page;page="day" }
     fun back() {
-        page=when(page){"episode"->parent;"day"->dayParent;"setup"->setupParent;"settings"->settingsParent;"data-link"->"settings";"connections","insights"->"settings";else->""}
+        page=when(page){"episode"->parent;"day"->dayParent;"setup"->setupParent;"settings"->settingsParent;"data-link","deepseek"->"settings";"connections","insights"->"settings";else->""}
     }
     BackHandler(page.isBlank()&&tab!=0){tab=0}
     BackHandler(page.isNotBlank()){back()}
@@ -60,7 +60,7 @@ import java.time.format.DateTimeFormatter
             Column(Modifier.widthIn(max=680.dp).fillMaxSize().padding(horizontal=if(immersive)0.dp else 16.dp)) {
                 if(!immersive)Row(Modifier.fillMaxWidth().heightIn(min=56.dp),verticalAlignment=Alignment.CenterVertically) {
                     if(page.isNotBlank())IconButton(onClick={back()}){Icon(Icons.Outlined.ArrowBack,"返回")}
-                    Text(if(page.isBlank())mainPageTitles[tab] else when(page){"settings"->"设置";"data-link"->"数据互通";"chapter"->"事件详情";"summary"->"一天统计";"connections"->"应用与来源";"setup"->"记录权限";"search"->"搜索回忆";"episode"->"生活片段";"insights"->"生活趋势";else->"一天的时间线"},Modifier.weight(1f),style=MaterialTheme.typography.titleLarge)
+                    Text(if(page.isBlank())mainPageTitles[tab] else when(page){"settings"->"设置";"data-link"->"数据互通";"deepseek"->"DeepSeek 与记忆";"chapter"->"事件详情";"summary"->"一天统计";"connections"->"应用与来源";"setup"->"记录权限";"search"->"搜索回忆";"episode"->"生活片段";"insights"->"生活趋势";else->"一天的时间线"},Modifier.weight(1f),style=MaterialTheme.typography.titleLarge)
                     if(page.isBlank()) {
                         IconButton(onClick={settingsParent=page;page="settings"},modifier=Modifier.testTag("open-settings")){Icon(Icons.Outlined.Settings,"设置")}
                     }
@@ -79,8 +79,9 @@ import java.time.format.DateTimeFormatter
                         if(projection==null)CircularProgressIndicator() else ChapterDetailsPage(day,projection.chapters.firstOrNull{it.id==chapterId},s.homeAppMinMinutes,::open)
                     }
                     "summary"->DayStatisticsPage(s,::all,{val step=s.sources.firstOrNull{it.source==Source.STEPS};if(sourceReady(step))vm.reconnectSteps() else {vm.source(Source.STEPS,true);authorize(Source.STEPS)}},::open)
-                    "settings"->SettingsPage(s,vm,export,lock,{setup()},{page="connections"},{page="insights"},{vm.demo(!s.demo);tab=0;page=""},onDataLink={page="data-link"})
+                    "settings"->SettingsPage(s,vm,export,lock,{setup()},{page="connections"},{page="insights"},{vm.demo(!s.demo);tab=0;page=""},onDataLink={page="data-link"},onDeepSeek={page="deepseek"})
                     "data-link"->SharedDataPage(s.demo)
+                    "deepseek"->DeepSeekPage(s.demo)
                     else->when(tab){
                         0->DayDrumHome(s,{chapterId=it.id;page="chapter"},{page="summary"},{vm.refresh()},{setup()},{vm.demo(it)},vm::date,vm::homeAppMinutes,onAll=::all,onSearch={page="search"},onImportPhotos={if(sourceReady(s.sources.firstOrNull{it.source==Source.PHOTO}))vm.importPhotos(30) else (context as? MainActivity)?.requestPhotoJourney()},onCancelImport=vm::cancelPhotoImport,onShare={s.day?.let { day->shareScope.launch { runCatching { DayMemoryShare.share(context,day,s.homeAppMinMinutes) }.onFailure { vm.message("分享图片生成失败，请重试") } } }},onSettings={settingsParent="";page="settings"})
                         1->AchievementsPage(s.copy(achievements=awards.snapshot,achievementsLoading=awards.loading,achievementError=awards.error),

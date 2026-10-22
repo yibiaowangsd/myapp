@@ -7,9 +7,10 @@ import java.security.MessageDigest
 import java.time.LocalDate
 
 @Serializable data class SharedDayEntry(val date:String,val path:String,val hash:String)
+@Serializable data class SharedMemoryEntry(val path:String="wo/memory.json",val hash:String)
 @Serializable data class SharedDataIndex(
     val schemaVersion:Int=1,val source:String="wo-life-records",val archiveZone:String,
-    val updatedAtMs:Long,val days:List<SharedDayEntry>
+    val updatedAtMs:Long,val days:List<SharedDayEntry>,val memory:SharedMemoryEntry?=null
 )
 data class SharedSyncResult(val uploaded:Int,val pending:Int,val total:Int)
 interface SharedFileStore {
@@ -47,11 +48,12 @@ fun sharedDay(day:DayView):JsonObject=buildJsonObject {
 
 /** Index is published last. A partial upload remains retryable and never advertises a missing new day. */
 class SharedDataPublisher(private val store:SharedFileStore,private val now:()->Long=System::currentTimeMillis) {
-    suspend fun publish(dates:List<String>,zone:String,load:suspend(String)->DayView,maxChanges:Int=48):SharedSyncResult {
+    suspend fun publish(dates:List<String>,zone:String,load:suspend(String)->DayView,maxChanges:Int=48,memory:LifeMemory?=null):SharedSyncResult {
         require(maxChanges>0)
         store.requirePrivate()
         val original=store.read("wo/index.json")?.let { WoJson.decodeFromString<SharedDataIndex>(it) }
         require(original==null||(original.schemaVersion==1&&original.source=="wo-life-records")) { "数据目录格式不兼容" }
+        require(original?.memory==null||original.memory.path=="wo/memory.json") { "记忆路径不正确" }
         val existing=original?.days.orEmpty().associateBy { it.date }
         require(existing.values.all { it.path==sharedDayPath(it.date) }) { "数据索引中的日期路径不正确" }
         val canonical=dates.distinct().sortedDescending();canonical.forEach { LocalDate.parse(it) }
@@ -70,8 +72,15 @@ class SharedDataPublisher(private val store:SharedFileStore,private val now:()->
             entries[date]=SharedDayEntry(date,path,hash);uploaded++
         }
         val days=entries.values.sortedByDescending { it.date }
-        if(original==null||original.archiveZone!=zone||original.days!=days) {
-            val index=SharedDataIndex(archiveZone=zone,updatedAtMs=now(),days=days)
+        val memoryEntry=memory?.let {
+            val text=WoJson.encodeToString(LifeMemory.serializer(),it.checked())
+            val hash=MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).lowerHex()
+            // Compare content, rather than just the index, so a failed index write is retryable.
+            if(store.read("wo/memory.json")!=text)store.write("wo/memory.json",text)
+            SharedMemoryEntry(hash=hash)
+        } ?: original?.memory
+        if(original==null||original.archiveZone!=zone||original.days!=days||original.memory!=memoryEntry) {
+            val index=SharedDataIndex(archiveZone=zone,updatedAtMs=now(),days=days,memory=memoryEntry)
             store.write("wo/index.json",WoJson.encodeToString(SharedDataIndex.serializer(),index))
         }
         return SharedSyncResult(uploaded,pending,days.size)

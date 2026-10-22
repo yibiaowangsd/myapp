@@ -25,7 +25,7 @@ import java.util.zip.*
 
 @Serializable data class ArchiveHeader(val version:Int=1,val algorithm:String="AES256_GCM_HKDF_1MB",val encryptedKeyset:String)
 @Serializable data class ArchiveManifest(val version:Int=1,val archiveZone:String,val hashes:Map<String,String>,val counts:Map<String,Int>)
-@Serializable data class BackupPolicy(val policy:Policy,val sourceKeySeed:String)
+@Serializable data class BackupPolicy(val policy:Policy,val sourceKeySeed:String,val memory:LifeMemory?=null)
 @Serializable data class BackupEpisode(val episode:Episode,val relations:List<RelationExport> = emptyList())
 @Serializable data class RelationExport(val parentId:String,val childId:String,val relation:String)
 data class RestoreInspection(val directory:File,val manifest:ArchiveManifest,val files:Map<String,File>,val count:Int)
@@ -55,7 +55,7 @@ class BackupService(private val context:Context,private val repo:WoRepository) {
             File(directory,"annotations.jsonl").bufferedWriter().use { w -> annotations.forEach { w.write(it.json);w.newLine() } };counts["annotations.jsonl"]=annotations.size
             val places=repo.places();File(directory,"places.json").writeText(WoJson.encodeToString(places));counts["places.json"]=places.size
             val secretSeed=repo.vault.seed()
-            val policy=BackupPolicy(repo.cachedPolicy,Base64.encodeToString(secretSeed,Base64.NO_WRAP));secretSeed.fill(0)
+            val policy=BackupPolicy(repo.cachedPolicy,Base64.encodeToString(secretSeed,Base64.NO_WRAP),dao.lifeMemory());secretSeed.fill(0)
             File(directory,"policy.json").writeText(WoJson.encodeToString(policy));counts["policy.json"]=1
             val days=dao.summaries(50000)
             File(directory,"daily.jsonl").bufferedWriter().use { w -> days.forEach { w.write(it.json);w.newLine() } };counts["daily.jsonl"]=days.size
@@ -107,7 +107,7 @@ class BackupService(private val context:Context,private val repo:WoRepository) {
                 }
                 require(seen==names);plain.delete()
             }
-            require(File(dir,"manifest.json").length()<=65536&&File(dir,"policy.json").length()<=16384&&File(dir,"places.json").length()<=16*1024*1024)
+            require(File(dir,"manifest.json").length()<=65536&&File(dir,"policy.json").length()<=524288&&File(dir,"places.json").length()<=16*1024*1024)
             val manifest=WoJson.decodeFromString<ArchiveManifest>(File(dir,"manifest.json").readText());require(manifest.version==1&&manifest.hashes.keys==names-"manifest.json")
             val files=names.associateWith { File(dir,it) }
             manifest.hashes.forEach { (name,hash) -> require(digest(files.getValue(name))==hash) { "E001:内容哈希不匹配" } }
@@ -124,6 +124,7 @@ class BackupService(private val context:Context,private val repo:WoRepository) {
         val oldSeed=repo.vault.seed()
         try {
             val policy=WoJson.decodeFromString<BackupPolicy>(inspection.files.getValue("policy.json").readText())
+            policy.memory?.checked()
             val seed=Base64.decode(policy.sourceKeySeed,Base64.NO_WRAP);require(seed.size==32);java.time.ZoneId.of(policy.policy.archiveZone)
             val places=WoJson.decodeFromString<List<Place>>(inspection.files.getValue("places.json").readText());require(places.size<=50000)
             val dao=stage.dao()
@@ -160,6 +161,8 @@ class BackupService(private val context:Context,private val repo:WoRepository) {
             repo.vault.restoreSeed(seed);seed.fill(0)
             repo.db.withTransaction {
                 val target=repo.db.dao()
+                val memoryRevision=target.lifeMemory().revision
+                target.putLifeMemory((policy.memory ?: LifeMemory()).copy(revision=memoryRevision+1))
                 listOf("event_search","episode_evidence","episode_relation","annotation","observation","episode","place","media_ref","daily_metric","daily_summary","source_coverage","dirty_window","exclusion","source_state").forEach { repo.db.openHelper.writableDatabase.execSQL("DELETE FROM $it") }
                 repo.db.dao().deleteMetaRange("achievement.day.v1:","achievement.day.v1:\uffff")
                 repo.db.dao().deleteMetaRange("day.snapshot.v1:","day.snapshot.v1:\uffff")
