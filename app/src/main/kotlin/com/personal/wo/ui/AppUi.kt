@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.material.icons.Icons
@@ -102,7 +103,7 @@ internal val mainPageTitles=listOf("首页","成就","设置")
             containerColor=MaterialTheme.colorScheme.surface,tonalElevation=0.dp,windowInsets=WindowInsets(0,0,0,0)) {
             val icons=listOf(Icons.Outlined.Home,Icons.Outlined.EmojiEvents,Icons.Outlined.Settings)
             mainPageTitles.forEachIndexed { i,label ->
-                NavigationBarItem(selected=selected==i,onClick={onSelect(i)},
+                NavigationBarItem(selected=selected==i,onClick={onSelect(i)},modifier=Modifier.testTag(listOf("nav-home","nav-achievements","nav-settings")[i]),
                     icon={Icon(icons[i],null,Modifier.size(23.dp))},
                     label={Text(label,fontWeight=if(selected==i)FontWeight.Bold else FontWeight.Normal)},
                     colors=NavigationBarItemDefaults.colors(selectedIconColor=Ink,selectedTextColor=MaterialTheme.colorScheme.onSurface,

@@ -79,16 +79,16 @@ import kotlin.math.roundToInt
             Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
                 if(!compactHeader)Text(if(date==today)"今天，值得留住" else "翻开这一天",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis)
                 Row(verticalAlignment=Alignment.CenterVertically) {
-                    Text("${date.year}年${date.monthValue}月${date.dayOfMonth}日",style=MaterialTheme.typography.labelMedium,modifier=Modifier.testTag("drum-date"))
+                    Text("${date.year}年${date.monthValue}月${date.dayOfMonth}日",style=MaterialTheme.typography.labelMedium,modifier=Modifier.testTag(if(day.dayDate==s.selectedDate)"drum-date" else "drum-date-loading"))
                     Icon(Icons.Outlined.ExpandMore,null,Modifier.size(18.dp))
                 }
                 if(!compactHeader)Text("星期${listOf("一","二","三","四","五","六","日")[date.dayOfWeek.value-1]}  /  ${if(day.dayDate==s.selectedDate)"${chapters.size} 段经历" else "正在展开"}",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
-            TextButton(onClick={onDate(date.minusDays(1))}){Icon(Icons.Outlined.ChevronLeft,null,Modifier.size(18.dp));Text("前一天")}
+            TextButton(onClick={onDate(date.minusDays(1))},modifier=Modifier.testTag("date-previous")){Icon(Icons.Outlined.ChevronLeft,null,Modifier.size(18.dp));Text("前一天")}
             TextButton(onClick={if(s.demo)demo(false);onDate(today)},enabled=date!=today||s.demo){Text(if(date==today&&!s.demo)"今天" else "回到今天")}
-            TextButton(onClick={onDate(date.plusDays(1))},enabled=date<today){Text("后一天");Icon(Icons.Outlined.ChevronRight,null,Modifier.size(18.dp))}
+            TextButton(onClick={onDate(date.plusDays(1))},enabled=date<today,modifier=Modifier.testTag("date-next")){Text("后一天");Icon(Icons.Outlined.ChevronRight,null,Modifier.size(18.dp))}
         }
         if(s.photoImportBusy) {
             Row(Modifier.fillMaxWidth().padding(horizontal=24.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -115,7 +115,7 @@ import kotlin.math.roundToInt
                     }
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                         TextButton(onClick=setup){Text("开启记录来源")}
-                        TextButton(onClick={demo(true)}){Text("转动示例看看")}
+                        TextButton(onClick={demo(true)},modifier=Modifier.testTag("open-demo")){Text("转动示例看看")}
                     }
                 } }
                 Text("留在本机 · 随时回看",Modifier.fillMaxWidth().padding(top=18.dp),style=MaterialTheme.typography.labelSmall,
