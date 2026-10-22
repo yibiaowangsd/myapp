@@ -113,8 +113,9 @@ internal fun MacrobenchmarkScope.changeDateAndTabs() {
     device.required(By.res("nav-achievements"), "Achievements tab").click()
     device.required(By.res("achievement-gallery"), "Achievements gallery")
     device.required(By.res("achievement-count").textContains("枚已点亮"), "Loaded achievements")
-    device.required(By.res("nav-settings"), "Settings tab").click()
+    device.required(By.res("open-settings"), "Top-right settings").click()
     device.required(By.res("settings-page"), "Settings page")
+    device.pressBack()
     device.required(By.res("nav-home"), "Home tab").click()
     waitForHome()
 }

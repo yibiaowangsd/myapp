@@ -34,7 +34,7 @@ import kotlin.math.roundToInt
 @Composable fun DayDrumHome(s:WoUiState,onChapter:(DayChapter)->Unit,statistics:()->Unit,
     refresh:()->Unit,setup:()->Unit,demo:(Boolean)->Unit,onDate:(LocalDate)->Unit={},
     onThreshold:(Int)->Unit={},today:LocalDate=LocalDate.now(ZoneId.of(s.policy.archiveZone)),onAll:()->Unit={},
-    onSearch:()->Unit={},onImportPhotos:()->Unit=setup,onShare:()->Unit={},onCancelImport:()->Unit={}) {
+    onSearch:()->Unit={},onImportPhotos:()->Unit=setup,onShare:()->Unit={},onCancelImport:()->Unit={},onSettings:()->Unit={}) {
     val day=s.day ?: return
     val date=LocalDate.parse(s.selectedDate)
     val projection=resolvedHomeProjection(s,day)
@@ -56,7 +56,8 @@ import kotlin.math.roundToInt
                 Surface(shape=CircleShape,color=WoMint) {
                     Text("我",Modifier.padding(horizontal=10.dp,vertical=6.dp),color=Ink,fontWeight=FontWeight.Black,style=MaterialTheme.typography.titleMedium)
                 }
-                Text(if(s.demo)"生活胶片 · 虚构演示" else "生活胶片",style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold)
+                Text(if(s.demo)"生活胶片 · 虚构演示" else "生活胶片",modifier=Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis,
+                    style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold)
             }
             IconButton(onClick=onSearch,modifier=Modifier.testTag("home-search")){Icon(Icons.Outlined.Search,"搜索回忆")}
             IconButton(onClick=statistics,enabled=day.dayDate==s.selectedDate){Icon(Icons.Outlined.BarChart,"一天统计")}
@@ -71,6 +72,7 @@ import kotlin.math.roundToInt
                     if(s.demo)DropdownMenuItem(text={Text("退出虚构演示")},onClick={menu=false;demo(false)})
                 } }
             }
+            IconButton(onClick=onSettings,modifier=Modifier.testTag("open-settings")){Icon(Icons.Outlined.Settings,"设置")}
         }
         Row(Modifier.fillMaxWidth().padding(horizontal=24.dp).clip(RoundedCornerShape(16.dp))
             .clickable(onClickLabel="选择日期"){calendar=true}.padding(vertical=if(compactHeader)0.dp else 2.dp),

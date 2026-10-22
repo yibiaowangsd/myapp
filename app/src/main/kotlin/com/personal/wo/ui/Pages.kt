@@ -31,7 +31,7 @@ import java.time.*
     val today=LocalDate.now(ZoneId.of(s.policy.archiveZone))
     var monthString by rememberSaveable{mutableStateOf(YearMonth.from(LocalDate.parse(s.selectedDate)).toString())};val month=YearMonth.parse(monthString);val records=s.history.associateBy{it.dayDate};val offset=month.atDay(1).dayOfWeek.value-1
     LazyColumn(contentPadding=PaddingValues(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-        item{Text("把日子，一页页翻回来",style=MaterialTheme.typography.headlineLarge);Muted("点一个日期，重温那天留下的片段。",Modifier.padding(top=10.dp))}
+        item{Text("历史记录",style=MaterialTheme.typography.headlineLarge);Muted("点一个日期，重温那天留下的片段。",Modifier.padding(top=10.dp))}
         item{Paper{
             Row(verticalAlignment=Alignment.CenterVertically){TextButton(onClick={monthString=month.minusMonths(1).toString()}){Text("上月")};Text("${month.year}年${month.monthValue}月",Modifier.weight(1f));TextButton(onClick={monthString=month.plusMonths(1).toString()},enabled=month<YearMonth.from(today)){Text("下月")}}
             BoxWithConstraints{val cell=(maxWidth.value/7).dp;Column{
@@ -66,7 +66,7 @@ import java.time.*
 }
 @Composable fun InsightPage(s:WoUiState){
     LazyColumn(verticalArrangement=Arrangement.spacedBy(12.dp),contentPadding=PaddingValues(bottom=24.dp)){
-        item{Text("最近的生活节奏",style=MaterialTheme.typography.headlineLarge);Muted("描述有依据的变化，不给一天打分。",Modifier.padding(top=12.dp,bottom=16.dp))}
+        item{Text("生活趋势",style=MaterialTheme.typography.headlineLarge);Muted("描述有依据的变化，不给一天打分。",Modifier.padding(top=12.dp,bottom=16.dp))}
         item{WeeklyUsageCard(s.history,s.policy.archiveZone)}
         if(s.insights.isEmpty())item{Empty("再多记录几天","这里会在数据足够时，展示手机使用和活动的变化。先从下面的最近一周开始。")}
         items(s.insights){i->Paper{Text(i.title,style=MaterialTheme.typography.titleLarge);Muted(i.detail)}}
@@ -193,27 +193,20 @@ import java.time.*
         dismissButton={TextButton(onClick={delete=false}){Text("取消")}})
 }
 
-@Composable fun SettingsPage(s:WoUiState,vm:WoViewModel,export:(String)->Unit,lock:(Boolean)->Unit,permissions:()->Unit,connections:()->Unit,insights:()->Unit,demo:()->Unit) {
+@Composable fun SettingsPage(s:WoUiState,vm:WoViewModel,export:(String)->Unit,lock:(Boolean)->Unit,permissions:()->Unit,connections:()->Unit,insights:()->Unit,demo:()->Unit,onDataLink:()->Unit={}) {
     val context=LocalContext.current
     var delete by remember{mutableStateOf(false)}
     var timeExclude by remember{mutableStateOf(false)}
     var runtime by rememberSaveable{mutableStateOf(false)}
     var fromTime by remember{mutableStateOf("12:00")}
     var toTime by remember{mutableStateOf("13:00")}
-    var endpoint by rememberSaveable{mutableStateOf("")}
-    var model by rememberSaveable{mutableStateOf("")}
-    var apiKey by remember{mutableStateOf("")}
     LazyColumn(modifier=Modifier.testTag("settings-page"),verticalArrangement=Arrangement.spacedBy(16.dp),contentPadding=PaddingValues(bottom=28.dp)) {
-        item {
-            Text("按你的方式，\n留下生活。",style=MaterialTheme.typography.headlineLarge)
-            Muted("记录什么、什么时候暂停，都由你决定。",Modifier.padding(top=10.dp))
-        }
         item {
             Surface(color=Ink,contentColor=WoPaper,shape=RoundedCornerShape(28.dp)) {
                 Column(Modifier.fillMaxWidth().padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment=Alignment.CenterVertically) {
                         Box(Modifier.size(8.dp).background(if(s.policy.requested&&!s.policy.paused)WoMint else WoPaper.copy(alpha=.5f),RoundedCornerShape(4.dp)))
-                        Text(if(s.policy.paused)"留一点空白" else if(s.policy.requested)"生活正在被记住" else "从今天开始",Modifier.padding(start=10.dp),style=MaterialTheme.typography.titleLarge)
+                        Text(if(s.policy.paused)"记录已暂停" else if(s.policy.requested)"自动记录中" else "尚未开启记录",Modifier.padding(start=10.dp),style=MaterialTheme.typography.titleLarge)
                     }
                     Text(if(s.policy.paused)"自动记录已暂停，过去的回忆随时可以翻看。" else if(s.policy.requested)"只整理你已开启的来源。可以随时暂停。" else "先开启一个来源，就能慢慢拼起自己的时间轴。",color=WoPaper.copy(alpha=.76f),style=MaterialTheme.typography.bodyMedium)
                     FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
@@ -228,8 +221,9 @@ import java.time.*
             }
         }
         item{SettingsShortcuts(permissions,connections,insights)}
+        item{Paper{SettingsShortcut(Icons.Outlined.CloudSync,"数据互通","同步记录，让 ChatGPT 在这里读取",onDataLink)}}
         item {
-            Section("只属于你的记录")
+            Section("数据与隐私")
             Paper {
                 Row(verticalAlignment=Alignment.CenterVertically) {
                     IconTile(Icons.Outlined.Lock)
@@ -245,9 +239,9 @@ import java.time.*
             }
         }
         item {
-            Section("把回忆带走")
+            Section("备份与导出")
             Paper {
-                Text("换手机，也能接着翻看",style=MaterialTheme.typography.titleMedium)
+                Text("备份与恢复",style=MaterialTheme.typography.titleMedium)
                 Muted("加密备份保存记录与修正，请单独保管恢复码。备份不包含相册原图。")
                 FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
                     Button(onClick={export("archive")}){Text("备份我的记录")}
@@ -279,17 +273,6 @@ import java.time.*
                         s.diagnostics.take(10).forEach{Muted(it)}
                     }
                 }
-            }
-        }
-        if(runtime&&BuildConfig.ENHANCED)item {
-            Paper {
-                Text("可选摘要增强",style=MaterialTheme.typography.titleMedium)
-                Muted("主动使用时，向你配置的服务发送已有结构化事实，以调整摘要顺序。每天最多3次。")
-                OutlinedTextField(endpoint,{endpoint=it},Modifier.fillMaxWidth(),label={Text("HTTPS 服务地址")})
-                OutlinedTextField(model,{model=it},Modifier.fillMaxWidth(),label={Text("模型标识（可选）")})
-                OutlinedTextField(apiKey,{apiKey=it},Modifier.fillMaxWidth(),label={Text("访问密钥（留空保留原值）")},visualTransformation=androidx.compose.ui.text.input.PasswordVisualTransformation())
-                TextButton(onClick={vm.enhancedConfig(endpoint,model,apiKey);apiKey=""}){Text("保存配置")}
-                OutlinedButton(onClick=vm::enhance){Text("整理当前摘要顺序")}
             }
         }
         item {

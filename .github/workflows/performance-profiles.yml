@@ -64,11 +64,11 @@ jobs:
           # Only the emulator hardware warning is suppressed. No test is skipped and
           # a required embedded Baseline Profile must still install successfully.
           script: |
-            ./gradlew --no-daemon --no-parallel --max-workers=1 -Pwo.benchmarks=true -Pwo.profileGeneration=true :benchmark:connectedPersonalOfflineBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.personal.wo.benchmark.BaselineProfileGenerator
+            ./gradlew --no-daemon --no-parallel --max-workers=1 -Pwo.benchmarks=true -Pwo.profileGeneration=true :benchmark:connectedPersonalEnhancedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.personal.wo.benchmark.BaselineProfileGenerator
             mkdir -p performance-results/profile-generation
             cp -R benchmark/build/outputs benchmark/build/reports performance-results/profile-generation/
             python3 scripts/import_profiles.py benchmark/build/outputs
-            ./gradlew --no-daemon --no-parallel --max-workers=1 -Pwo.benchmarks=true :benchmark:connectedPersonalOfflineBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.personal.wo.benchmark.StartupAndTimelineBenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR
+            ./gradlew --no-daemon --no-parallel --max-workers=1 -Pwo.benchmarks=true :benchmark:connectedPersonalEnhancedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.personal.wo.benchmark.StartupAndTimelineBenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR
       - name: Verify every journey and packaged profiles
         run: python3 scripts/verify_performance_results.py
       - uses: actions/upload-artifact@v4
@@ -81,5 +81,5 @@ jobs:
             benchmark/build/outputs/
             benchmark/build/reports/
             performance-results/
-            app/build/outputs/apk/personalOffline/benchmark/
+            app/build/outputs/apk/personalEnhanced/benchmark/
           if-no-files-found: error

@@ -33,10 +33,11 @@ import java.time.format.DateTimeFormatter
 @Composable fun WoAppUi(vm:WoViewModel,authorize:(Source)->Unit,background:()->Unit,export:(String)->Unit,restoreUri:Uri?,clearUri:()->Unit,lock:(Boolean)->Unit) {
     val context=LocalContext.current
     val shareScope=rememberCoroutineScope()
-    val s by vm.state.collectAsStateWithLifecycle();var tab by key("main-tab-v170") { rememberSaveable { mutableIntStateOf(0) } };var page by rememberSaveable { mutableStateOf("") };var parent by rememberSaveable { mutableStateOf("") }
+    val s by vm.state.collectAsStateWithLifecycle();var tab by key("main-tab-v210") { rememberSaveable { mutableIntStateOf(0) } };var page by rememberSaveable { mutableStateOf("") };var parent by rememberSaveable { mutableStateOf("") }
     var dayParent by rememberSaveable { mutableStateOf("") }
     var setupParent by rememberSaveable { mutableStateOf("") }
     var chapterId by rememberSaveable { mutableStateOf("") }
+    var settingsParent by rememberSaveable { mutableStateOf("") }
     val immersive=page.isBlank()&&tab==0
     val achievements:AchievementViewModel=viewModel()
     val awards by achievements.state.collectAsStateWithLifecycle()
@@ -45,12 +46,12 @@ import java.time.format.DateTimeFormatter
         achievements.sync(s,achievementsVisible)
     }
     val snackbar=remember { SnackbarHostState() };val holder=rememberSaveableStateHolder();LaunchedEffect(s.message) { s.message?.let { snackbar.showSnackbar(it);vm.message(null) } }
-    LaunchedEffect(tab,page) { vm.section(page=="insights",page=="connections",page=="day",page.isBlank()&&tab==2) }
+    LaunchedEffect(tab,page) { vm.section(page=="insights",page=="connections",page=="day",page=="settings") }
     fun setup() { if(s.demo)vm.demo(false);setupParent=page;page="setup" }
     fun open(e:Episode) { parent=page;page="episode";vm.episode(e.id) }
     fun all() { dayParent=page;page="day" }
     fun back() {
-        page=when(page){"episode"->parent;"day"->dayParent;"setup"->setupParent;else->""}
+        page=when(page){"episode"->parent;"day"->dayParent;"setup"->setupParent;"settings"->settingsParent;"data-link"->"settings";"connections","insights"->"settings";else->""}
     }
     BackHandler(page.isBlank()&&tab!=0){tab=0}
     BackHandler(page.isNotBlank()){back()}
@@ -59,8 +60,10 @@ import java.time.format.DateTimeFormatter
             Column(Modifier.widthIn(max=680.dp).fillMaxSize().padding(horizontal=if(immersive)0.dp else 16.dp)) {
                 if(!immersive)Row(Modifier.fillMaxWidth().heightIn(min=56.dp),verticalAlignment=Alignment.CenterVertically) {
                     if(page.isNotBlank())IconButton(onClick={back()}){Icon(Icons.Outlined.ArrowBack,"返回")}
-                    Text(if(page.isBlank())mainPageTitles[tab] else when(page){"chapter"->"事件详情";"summary"->"一天统计";"connections"->"应用与来源";"setup"->"记录权限";"search"->"搜索回忆";"episode"->"生活片段";"insights"->"生活趋势";else->"一天的时间线"},Modifier.weight(1f),style=MaterialTheme.typography.titleLarge)
-                    if(page.isBlank()&&tab==2)IconButton(onClick={page="search"}){Icon(Icons.Outlined.Search,"搜索记录")}
+                    Text(if(page.isBlank())mainPageTitles[tab] else when(page){"settings"->"设置";"data-link"->"数据互通";"chapter"->"事件详情";"summary"->"一天统计";"connections"->"应用与来源";"setup"->"记录权限";"search"->"搜索回忆";"episode"->"生活片段";"insights"->"生活趋势";else->"一天的时间线"},Modifier.weight(1f),style=MaterialTheme.typography.titleLarge)
+                    if(page.isBlank()) {
+                        IconButton(onClick={settingsParent=page;page="settings"},modifier=Modifier.testTag("open-settings")){Icon(Icons.Outlined.Settings,"设置")}
+                    }
                 }
                 if(s.busy)LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
                 if(!s.loaded)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
@@ -76,12 +79,13 @@ import java.time.format.DateTimeFormatter
                         if(projection==null)CircularProgressIndicator() else ChapterDetailsPage(day,projection.chapters.firstOrNull{it.id==chapterId},s.homeAppMinMinutes,::open)
                     }
                     "summary"->DayStatisticsPage(s,::all,{val step=s.sources.firstOrNull{it.source==Source.STEPS};if(sourceReady(step))vm.reconnectSteps() else {vm.source(Source.STEPS,true);authorize(Source.STEPS)}},::open)
+                    "settings"->SettingsPage(s,vm,export,lock,{setup()},{page="connections"},{page="insights"},{vm.demo(!s.demo);tab=0;page=""},onDataLink={page="data-link"})
+                    "data-link"->SharedDataPage(s.demo)
                     else->when(tab){
-                        0->DayDrumHome(s,{chapterId=it.id;page="chapter"},{page="summary"},{vm.refresh()},{setup()},{vm.demo(it)},vm::date,vm::homeAppMinutes,onAll=::all,onSearch={page="search"},onImportPhotos={if(sourceReady(s.sources.firstOrNull{it.source==Source.PHOTO}))vm.importPhotos(30) else (context as? MainActivity)?.requestPhotoJourney()},onCancelImport=vm::cancelPhotoImport,onShare={s.day?.let { day->shareScope.launch { runCatching { DayMemoryShare.share(context,day,s.homeAppMinMinutes) }.onFailure { vm.message("分享图片生成失败，请重试") } } }})
+                        0->DayDrumHome(s,{chapterId=it.id;page="chapter"},{page="summary"},{vm.refresh()},{setup()},{vm.demo(it)},vm::date,vm::homeAppMinutes,onAll=::all,onSearch={page="search"},onImportPhotos={if(sourceReady(s.sources.firstOrNull{it.source==Source.PHOTO}))vm.importPhotos(30) else (context as? MainActivity)?.requestPhotoJourney()},onCancelImport=vm::cancelPhotoImport,onShare={s.day?.let { day->shareScope.launch { runCatching { DayMemoryShare.share(context,day,s.homeAppMinMinutes) }.onFailure { vm.message("分享图片生成失败，请重试") } } }},onSettings={settingsParent="";page="settings"})
                         1->AchievementsPage(s.copy(achievements=awards.snapshot,achievementsLoading=awards.loading,achievementError=awards.error),
                             achievements::create,achievements::delete,achievements::reading,achievements::showcase,achievements::seen,achievements::refresh,vm::loadApps,
                             {vm.date(it);tab=0;page=""})
-                        2->SettingsPage(s,vm,export,lock,{setup()},{page="connections"},{page="insights"},{vm.demo(!s.demo);tab=0})
                     }
                 } }
             }
@@ -95,15 +99,15 @@ import java.time.format.DateTimeFormatter
 }
 @Composable fun UnlockScreen(unlock:()->Unit) { Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){Column(Modifier.fillMaxSize().padding(28.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally){Text("我",fontFamily=FontFamily.Serif,fontSize=54.sp);Spacer(Modifier.height(24.dp));Text("你的一天，只由你查看",style=MaterialTheme.typography.titleLarge);Spacer(Modifier.height(24.dp));Button(onClick=unlock){Text("解锁查看")}}} }
 
-internal val mainPageTitles=listOf("首页","成就","设置")
+internal val mainPageTitles=listOf("首页","成就")
 
 @Composable fun AppNavigation(selected: Int, onSelect: (Int)->Unit) {
     Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal=16.dp,vertical=8.dp)) {
         NavigationBar(modifier=Modifier.clip(RoundedCornerShape(28.dp)).height(70.dp),
             containerColor=MaterialTheme.colorScheme.surface,tonalElevation=0.dp,windowInsets=WindowInsets(0,0,0,0)) {
-            val icons=listOf(Icons.Outlined.Home,Icons.Outlined.EmojiEvents,Icons.Outlined.Settings)
+            val icons=listOf(Icons.Outlined.Home,Icons.Outlined.EmojiEvents)
             mainPageTitles.forEachIndexed { i,label ->
-                NavigationBarItem(selected=selected==i,onClick={onSelect(i)},modifier=Modifier.testTag(listOf("nav-home","nav-achievements","nav-settings")[i]),
+                NavigationBarItem(selected=selected==i,onClick={onSelect(i)},modifier=Modifier.testTag(listOf("nav-home","nav-achievements")[i]),
                     icon={Icon(icons[i],null,Modifier.size(23.dp))},
                     label={Text(label,fontWeight=if(selected==i)FontWeight.Bold else FontWeight.Normal)},
                     colors=NavigationBarItemDefaults.colors(selectedIconColor=Ink,selectedTextColor=MaterialTheme.colorScheme.onSurface,

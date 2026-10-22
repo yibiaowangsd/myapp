@@ -67,7 +67,7 @@ def main():
             measured[name] = metrics
     assert set(measured) == set(expected), ('Missing metric JSON', set(expected) - set(measured))
 
-    apks = list((ROOT / 'app/build/outputs/apk/personalOffline/benchmark').glob('*.apk'))
+    apks = list((ROOT / 'app/build/outputs/apk/personalEnhanced/benchmark').glob('*.apk'))
     assert apks, 'No measured APK'
     for apk in apks:
         with zipfile.ZipFile(apk) as archive:

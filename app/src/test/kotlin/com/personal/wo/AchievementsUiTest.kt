@@ -55,7 +55,10 @@ class AchievementsUiTest {
         val s=fixture();var ids=emptySet<String>()
         compose.setContent{screen(s,seen={ids=it})}
         compose.onNodeWithTag("achievement-count").assertTextEquals("${s.achievements!!.unlocked.size} 枚已点亮 · 32 枚可收藏")
+        compose.onNodeWithText("把日常，收成勋章").assertDoesNotExist()
+        compose.onNodeWithTag("medal-days-1").assertIsDisplayed()
         capture("achievements-gallery")
+        compose.onNodeWithTag("achievement-gallery").performScrollToNode(hasTestTag("achievement-acknowledge"))
         compose.onNodeWithTag("achievement-acknowledge").performClick();assertEquals(s.achievements.newIds,ids)
     }
     @Test fun detailExplainsApproximateReadingAndAllowsShowcase() {
@@ -81,6 +84,7 @@ class AchievementsUiTest {
     @Test fun customGoalNeedsValidNameAndPositiveTarget() {
         var saved:AchievementGoal?=null
         compose.setContent{screen(create={saved=it})}
+        compose.onNodeWithTag("achievement-options").performClick()
         compose.onNodeWithTag("create-achievement").performClick()
         compose.onNodeWithTag("custom-achievement-save").assertIsNotEnabled()
         compose.onNodeWithTag("custom-achievement-name").performTextInput("慢慢成为自己")
@@ -92,18 +96,21 @@ class AchievementsUiTest {
     @Test fun demoHasSeparateLabelAndCannotWriteAchievements() {
         compose.setContent{screen(fixture(true))}
         compose.onNodeWithText("虚构演示 · 不写入真实成就").assertIsDisplayed()
+        compose.onNodeWithTag("achievement-options").performClick()
         compose.onNodeWithTag("create-achievement").assertIsNotEnabled()
         compose.onNodeWithText("阅读应用").assertIsNotEnabled()
         compose.onNodeWithTag("achievement-acknowledge").assertDoesNotExist()
     }
     @Test fun customFilterHasHelpfulEmptyState() {
         compose.setContent{screen()}
+        compose.onNodeWithTag("achievement-filters").performClick()
         compose.onNodeWithTag("achievement-filter-CUSTOM").performClick()
         compose.onNodeWithText("还没有自定义成就。给自己的日常取一个特别的名字。").assertIsDisplayed()
     }
     @Test fun readingApplicationsCanBeExplicitlyDeselected() {
         var packages:Set<String>?=null
         compose.setContent{screen(read={packages=it})}
+        compose.onNodeWithTag("achievement-options").performClick()
         compose.onNodeWithText("阅读应用").performClick()
         compose.onNodeWithText("微信读书").performClick()
         compose.onNodeWithText("保存").performClick()
@@ -123,6 +130,7 @@ class AchievementsUiTest {
                 WoTheme(dark=true){Surface{Box(Modifier.fillMaxSize().padding(16.dp)){AchievementsPage(fixture(),{},{},{},{},{},{},{},{})}}}
             }
         }
+        compose.onNodeWithTag("achievement-options").performClick()
         compose.onNodeWithTag("create-achievement").assertIsDisplayed().performClick()
         compose.onNodeWithTag("custom-achievement-name").assertIsDisplayed()
         capture("achievements-large-dark")
