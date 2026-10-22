@@ -32,15 +32,21 @@ def main():
                 'timelineFrames': 5, 'datesAndTabs': 5}
     require_tests(MEASURED, 'com.personal.wo.benchmark.StartupAndTimelineBenchmark', set(expected))
 
-    # Check fresh device output, not the previously committed source profiles.
+    # AndroidX emits startup-only collections as startup-prof.txt; they must
+    # contribute to both the Baseline Profile (ART) and Startup Profile (DEX layout).
+    fresh = {}
     for name in ('baseline-prof.txt', 'startup-prof.txt'):
         paths = list(GENERATED.rglob('*' + name))
         assert paths, 'No freshly generated ' + name
-        rules = {line.strip() for p in paths for line in p.read_text().splitlines()
-                 if 'Lcom/personal/wo/' in line and not line.startswith('#')}
-        assert rules and any('WelcomeUiKt' in line for line in rules), name + ' missed first-run UI'
-        assert any('DayDrumUiKt' in line for line in rules), name + ' missed returning-user home'
-        print(name + ': ' + str(len(rules)) + ' freshly collected app rules')
+        fresh[name] = {line.strip() for p in paths for line in p.read_text().splitlines()
+                       if 'Lcom/personal/wo/' in line and not line.startswith('#')}
+        assert fresh[name] and any('DayDrumUiKt' in line for line in fresh[name]), name + ' missed home'
+    assert any('WelcomeUiKt' in line for line in fresh['startup-prof.txt']), 'Startup collection missed welcome'
+    fresh['baseline-prof.txt'] |= fresh['startup-prof.txt']
+    for name, required_rules in fresh.items():
+        saved = set((ROOT / 'app/src/main/baselineProfiles' / name).read_text().splitlines())
+        assert required_rules <= saved, name + ' dropped freshly collected rules'
+        print(name + ': ' + str(len(required_rules)) + ' freshly collected app rules retained')
 
     measured = {}
     for path in MEASURED.rglob('*benchmarkData.json'):

@@ -38,7 +38,7 @@ internal fun UiDevice.required(selector: BySelector, label: String): UiObject2 =
 private fun UiDevice.requireHome() {
     required(By.res("day-drum-home"), "Home")
     // The header can update before the new day's projection has arrived.
-    required(By.res("drum-date"), "Loaded day projection")
+    required(By.res("drum-loaded-date"), "Loaded day projection")
     check(!hasObject(By.res("public-welcome"))) { "Welcome still covers home" }
 }
 
@@ -107,9 +107,9 @@ internal fun MacrobenchmarkScope.turnTimeline() {
 internal fun MacrobenchmarkScope.changeDateAndTabs() {
     val original = LocalDate.parse(device.required(By.res("drum-date"), "Loaded date").text, dateFormat)
     device.required(By.res("date-previous").enabled(true), "Previous date").click()
-    device.required(By.res("drum-date").text(original.minusDays(1).format(dateFormat)), "Previous day projection")
+    device.required(By.res("drum-loaded-date").hasDescendant(By.res("drum-date").text(original.minusDays(1).format(dateFormat))), "Previous day projection")
     device.required(By.res("date-next").enabled(true), "Next date").click()
-    device.required(By.res("drum-date").text(original.format(dateFormat)), "Restored day projection")
+    device.required(By.res("drum-loaded-date").hasDescendant(By.res("drum-date").text(original.format(dateFormat))), "Restored day projection")
     device.required(By.res("nav-achievements"), "Achievements tab").click()
     device.required(By.res("achievement-gallery"), "Achievements gallery")
     device.required(By.res("achievement-count").textContains("枚已点亮"), "Loaded achievements")

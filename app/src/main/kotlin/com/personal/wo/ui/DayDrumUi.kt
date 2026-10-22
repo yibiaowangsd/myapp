@@ -76,10 +76,10 @@ import kotlin.math.roundToInt
             .clickable(onClickLabel="选择日期"){calendar=true}.padding(vertical=if(compactHeader)0.dp else 2.dp),
             verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(14.dp)) {
             if(!compactHeader)Text(date.dayOfMonth.toString().padStart(2,'0'),fontSize=58.sp,lineHeight=62.sp,letterSpacing=(-3).sp,fontWeight=FontWeight.Light)
-            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.weight(1f).testTag(if(day.dayDate==s.selectedDate)"drum-loaded-date" else "drum-loading-date"),verticalArrangement=Arrangement.spacedBy(2.dp)) {
                 if(!compactHeader)Text(if(date==today)"今天，值得留住" else "翻开这一天",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis)
                 Row(verticalAlignment=Alignment.CenterVertically) {
-                    Text("${date.year}年${date.monthValue}月${date.dayOfMonth}日",style=MaterialTheme.typography.labelMedium,modifier=Modifier.testTag(if(day.dayDate==s.selectedDate)"drum-date" else "drum-date-loading"))
+                    Text("${date.year}年${date.monthValue}月${date.dayOfMonth}日",style=MaterialTheme.typography.labelMedium,modifier=Modifier.testTag("drum-date"))
                     Icon(Icons.Outlined.ExpandMore,null,Modifier.size(18.dp))
                 }
                 if(!compactHeader)Text("星期${listOf("一","二","三","四","五","六","日")[date.dayOfWeek.value-1]}  /  ${if(day.dayDate==s.selectedDate)"${chapters.size} 段经历" else "正在展开"}",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
