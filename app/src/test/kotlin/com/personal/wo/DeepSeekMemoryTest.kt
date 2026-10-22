@@ -30,7 +30,7 @@ class DeepSeekMemoryTest {
         db=Room.databaseBuilder(app,WoDatabase::class.java,name).allowMainThreadQueries().build()
         repo=WoRepository(db,KeyVault(app),EngineConfig(),app)
     }
-    @Before fun setup()=runBlocking {
+    @Before fun setup():Unit=runBlocking {
         open();repo.initialize();repo.command("start")
         val span=window(date,zone)
         repo.ingest(listOf(Observation("test-steps",Source.STEPS,"test-steps",Kind.STEP_DELTA,span.start+1000,span.start+2000,payload=Payload(steps=100))),repo.cachedPolicy.generation)
@@ -48,7 +48,7 @@ class DeepSeekMemoryTest {
     }.toString()
     private fun service(complete:suspend(DeepSeekConfig,JsonObject)->String={_,_->response()})=DeepSeekService(repo,
         readConfig={DeepSeekConfig("synthetic-test-key",enabled=true,autoReview=true)},complete=complete)
-    @Test fun memorySurvivesDatabaseCloseAndReopenAndIsIncludedInTheNextCall()=runBlocking {
+    @Test fun memorySurvivesDatabaseCloseAndReopenAndIsIncludedInTheNextCall():Unit=runBlocking {
         service().memory.saveNotes("关注步行目标")
         service().review()
         db.close();open();repo.initialize()
