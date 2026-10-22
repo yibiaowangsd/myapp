@@ -21,8 +21,8 @@ android {
         applicationId = "com.personal.wo"
         minSdk = 29
         targetSdk = 36
-        versionCode = 15
-        versionName = "2.1.0"
+        versionCode = 16
+        versionName = "2.2.0"
         buildConfigField("String", "HUAWEI_APP_ID", "\"\"")
         buildConfigField("String", "HUAWEI_APPROVED_SCOPES", "\"\"")
         buildConfigField("String", "HUAWEI_CERT_SHA256", "\"\"")

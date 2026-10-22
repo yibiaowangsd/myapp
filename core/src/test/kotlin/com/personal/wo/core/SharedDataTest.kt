@@ -64,4 +64,17 @@ class SharedDataTest {
         listOf("PRIVATE_NOTICE_TEXT","PRIVATE_NOTICE_TITLE","39.1234567","116.7654321","content://private-photo").forEach { assertFalse(text.contains(it)) }
         assertTrue(text.contains(source.title));assertTrue(text.contains(base.dayDate))
     }
+    @Test fun sharedMemoryIsPublishedBeforeItsIndexAndClearingItReplacesTheLiveFile() {
+        val files=Files()
+        run { SharedDataPublisher(files).publish(listOf(day().dayDate),day().zoneId,{day()},memory=LifeMemory(notes="关注阅读")) }
+        assertTrue(files.writes.indexOf("wo/memory.json")<files.writes.indexOf("wo/index.json"))
+        val index=WoJson.decodeFromString<SharedDataIndex>(files.files.getValue("wo/index.json"))
+        assertEquals("wo/memory.json",index.memory!!.path)
+        files.writes.clear()
+        run { SharedDataPublisher(files).publish(listOf(day().dayDate),day().zoneId,{day()},memory=LifeMemory(notes="关注阅读")) }
+        assertTrue(files.writes.isEmpty())
+        run { SharedDataPublisher(files).publish(listOf(day().dayDate),day().zoneId,{day()},memory=LifeMemory(revision=1)) }
+        assertEquals("",WoJson.decodeFromString<LifeMemory>(files.files.getValue("wo/memory.json")).notes)
+        assertEquals(listOf("wo/memory.json","wo/index.json"),files.writes)
+    }
 }

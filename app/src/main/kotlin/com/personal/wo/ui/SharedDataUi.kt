@@ -61,14 +61,14 @@ import java.time.format.DateTimeFormatter
             Text("在 ChatGPT 中连接一次",style=MaterialTheme.typography.titleMedium)
             Muted("确保 ChatGPT 的 GitHub 连接已获准访问这个私有仓库，再将下面的说明发到你的对话中。以后可以直接询问当天记录或历史变化。")
             OutlinedButton(onClick={
-                val text="我的生活记录由 App「我」持续同步到私有仓库 $repository。请通过 GitHub 读取 wo/index.json，再按日期读取其中列出的日文件。回答时结合当前可用的聊天记忆；以文件中的日期、来源和缺失说明为准。需要新数据时重新读取，不把旧快照当作实时数据。"
+                val text="我的生活记录与共享记忆由 App「我」持续同步到私有仓库 $repository。请通过 GitHub 读取 wo/index.json、其中 memory 指向的 wo/memory.json，再按日期读取日文件。memory.notes 是我填写的偏好；observations 和 review 是 DeepSeek 的历史推断，不是确认事实。回答时结合当前可用的聊天记忆；以文件中的日期、来源和缺失说明为准。需要新数据时重新读取，不把旧快照当作实时数据。"
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("生活数据连接",text));copied=true
             },enabled=s.enabled&&repository==s.repository,modifier=Modifier.testTag("shared-copy")){Text(if(copied)"已复制连接说明" else "复制连接说明")}
             Muted("同步提供可持续查询的历史来源，不会自动把每条记录写入 ChatGPT 账号记忆。")
         } }
         item { Paper {
             Text("同步范围",style=MaterialTheme.typography.titleMedium)
-            Muted("每日摘要、步数等指标、事件时间与标题、来源和缺失情况；不上传相册原图、精确坐标与通知正文。关闭同步保留手机记录和已上传文件。")
+            Muted("每日摘要、步数等指标、事件时间与标题、来源和缺失情况，以及已保存的偏好和 DeepSeek 分析记忆；不上传 API 密钥、相册原图、精确坐标与通知正文。关闭同步保留手机记录和已上传文件。")
             Muted("本地删除的日期在后续同步中更新或移出当前索引。GitHub 提交历史仍可能保留旧版本。")
             TextButton(onClick={context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/new")))}){Text("创建仓库（请选择 Private）")}
             TextButton(onClick={context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/settings/personal-access-tokens/new")))}){Text("创建仅限数据仓库的访问令牌")}

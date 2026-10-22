@@ -43,6 +43,8 @@ class WoApplication : Application(), Configuration.Provider {
                 synchronized(this@WoApplication) { currentGraph=it;initializing=false;attempt.complete(it) }
                 recoverableCall { SharedDataWork.schedule(this@WoApplication,it.sharedData.config().enabled) }
                     .onFailure { error->diagnostics.record("数据同步调度",error) }
+                recoverableCall { val config=it.deepSeek.config();DeepSeekWork.schedule(this@WoApplication,config.enabled&&config.autoReview) }
+                    .onFailure { error->diagnostics.record("DeepSeek 回顾调度",error) }
             }, onFailure = {
                 candidate?.let { g -> recoverableCall { g.close() } }
                 diagnostics.record("数据库与本地组件初始化",it)
@@ -70,6 +72,7 @@ class Graph(val context: Context) {
     val db: WoDatabase
     val repo: WoRepository
     val sharedData: SharedDataSync by lazy { SharedDataSync(repo) }
+    val deepSeek: DeepSeekService by lazy { DeepSeekService(repo) }
     val huawei: HuaweiHealthController by lazy { HuaweiHealthFactory.create(context,repo) }
     val collector: PullCollectors by lazy { PullCollectors(context,repo,huawei) }
     private data class Submission(val observation: Observation,val generation: Long)
