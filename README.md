@@ -2,11 +2,14 @@
 
 **让今天成为回忆。** 原生 Android 应用，把授权照片与生活片段整理成可以转动、搜索、修正和分享的时间轴。
 
-版本 **2.0.0** · Android 10 及以上 · Kotlin / Jetpack Compose · 本地优先，无需注册。
+版本 **2.1.0** · Android 10 及以上 · Kotlin / Jetpack Compose · 本地优先，无需注册。
 
 ## 这一版
 
-- **生活胶片首页**：大日期、全幅照片、上下错落事件卡、连续双向景深与随回看时间变化的光线；保留真正的水平时间轴。首页、成就、设置三个主页面。
+- **仅一个增强版**：移除离线构建配置，沿用原应用标识；成就页直接展示勋章，管理和筛选收进选项。
+- **ChatGPT 数据互通**：在右上角设置中连接自己的私有 GitHub 数据仓库，持续同步结构化日记录。ChatGPT 通过现有 GitHub 连接读取这些历史来源，继续在原来的聊天中分析。App 不增加聊天窗口、不需要 OpenAI API 密钥。参见[连接说明](docs/ChatGPT_Data_Link.md)。
+
+- **生活胶片首页**：大日期、全幅照片、上下错落事件卡、连续双向景深与随回看时间变化的光线；保留真正的水平时间轴。底部仅首页和成就两个入口，设置位于右上角。
 - **从照片开始**：首次进入由用户选择相册授权，支持 Android 14 的部分照片访问；可以跳过。其他来源在需要时单独连接。
 - **找回历史**：首页直接搜索，最近回忆、照片、收藏、地点和应用筛选；支持日期和关键词组合查询。
 - **历史照片导入**：最近30天、一年、全部；按批整理，显示进度并可停止，完成的记录立即可检索。
@@ -17,7 +20,7 @@
 
 ## 安装和使用
 
-安装本次交付的 `Wo_Android_v2.0.0.apk`。旧版可直接覆盖安装，保留记录与已有暂停状态。
+安装本次交付的 `Wo_Android_v2.1.0.apk`。旧版可直接覆盖安装，保留记录与已有暂停状态。
 
 1. 新用户点“从照片开始”，选择允许的照片；应用整理最近30天的影像。也可以先进入界面看看。
 2. 左右转动首页生活胶片，点击事件查看完整片段和照片。点日期可回到任意过去日期。
@@ -30,7 +33,7 @@
 
 ## 数据与升级
 
-- 应用标识 `com.personal.wo`，版本号14，沿用V1数据库；升级不清库。
+- 应用标识 `com.personal.wo`，版本号15，沿用V1数据库；升级不清库。
 - 照片片段和收藏长期保留；原始观察默认保留30天，通知正文7天，其他非收藏片段730天。照片原图不会复制进数据库。
 - 暂停、停止、排除和删除防重导仍生效。历史导入不会重新开启用户已经暂停的记录。
 - 加密备份不包含照片原图、系统权限或API密钥。请单独保管恢复码；跨设备恢复需要重新连接来源。
@@ -41,14 +44,16 @@
 JDK17、Android SDK36、Build Tools36.0.0。固定依赖锁与校验记录保留。
 
 ```bash
-./gradlew --no-parallel --max-workers=1 :core:test :app:testPersonalOfflineDebugUnitTest :app:testPersonalEnhancedDebugUnitTest
-./gradlew :app:lintPersonalOfflineDebug :app:lintPersonalEnhancedDebug
+./gradlew --no-parallel --max-workers=1 :core:test :app:testPersonalEnhancedDebugUnitTest
+./gradlew :app:lintPersonalEnhancedDebug
 ./gradlew :app:assemblePersonalEnhancedRelease
 ```
 
 发布签名由环境变量 `WO_KEYSTORE_PATH`、`WO_KEYSTORE_PASSWORD`、`WO_KEY_ALIAS`、`WO_KEY_PASSWORD` 提供；私钥不进入仓库。无签名配置的Release产物是未签名包，不能作为覆盖升级安装包。
 
 ## 文档
+
+- [2.1版本说明](docs/Release_2.1.0.md)
 
 - [2.0版本说明与验证](docs/Release_2.0.0.md)
 - [交互与实现参考](docs/Design_References_2.0.md)

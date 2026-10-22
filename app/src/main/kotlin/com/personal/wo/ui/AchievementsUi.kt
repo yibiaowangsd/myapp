@@ -51,6 +51,9 @@ import java.time.LocalDate
     onShowcase:(String)->Unit,onSeen:(Set<String>)->Unit,onRetry:()->Unit,onLoadApps:()->Unit,onDate:(LocalDate)->Unit
 ) {
     val snapshot=s.achievements
+    var manage by remember { mutableStateOf(false) }
+    var filters by rememberSaveable { mutableStateOf(false) }
+    var explanation by remember { mutableStateOf(false) }
     var family by rememberSaveable { mutableStateOf("ALL") }
     var filter by rememberSaveable { mutableStateOf("ALL") }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -72,18 +75,20 @@ import java.time.LocalDate
     LazyVerticalGrid(columns=GridCells.Adaptive(if(large)180.dp else 144.dp),modifier=Modifier.fillMaxSize().testTag("achievement-gallery"),
         contentPadding=PaddingValues(top=12.dp,bottom=28.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item(span={GridItemSpan(maxLineSpan)}) {
-            Surface(shape=RoundedCornerShape(26.dp),color=MaterialTheme.colorScheme.surfaceContainerLow) {
-                Column(Modifier.fillMaxWidth().padding(22.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                    Text("把日常，收成勋章",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Medium)
-                    Text("不与别人比较，只看见自己的积累。",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(if(snapshot==null)"正在整理你的成就…" else "${snapshot.unlocked.size} 枚已点亮 · ${snapshot.items.size} 枚可收藏",style=MaterialTheme.typography.titleMedium,modifier=Modifier.testTag("achievement-count"))
-                    if(s.demo)Text("虚构演示 · 不写入真实成就",style=MaterialTheme.typography.labelMedium)
-                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick={creating=true},enabled=snapshot!=null&&!s.demo&&!s.achievementsLoading&&snapshot.settings.customGoals.size<12,modifier=Modifier.testTag("create-achievement")){Text("自定义成就")}
-                        TextButton(onClick={onLoadApps();reading=true},enabled=snapshot!=null&&!s.demo){Text("阅读应用")}
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text(if(snapshot==null)"正在整理勋章…" else "${snapshot.unlocked.size} 枚已点亮 · ${snapshot.items.size} 枚可收藏",
+                    Modifier.weight(1f).testTag("achievement-count"),style=MaterialTheme.typography.labelLarge)
+                IconButton(onClick={filters=!filters},modifier=Modifier.testTag("achievement-filters")){Icon(Icons.Outlined.FilterList,"筛选勋章")}
+                Box {
+                    IconButton(onClick={manage=true},modifier=Modifier.testTag("achievement-options")){Icon(Icons.Outlined.MoreVert,"成就选项")}
+                    DropdownMenu(manage,{manage=false}) {
+                        DropdownMenuItem(text={Text("自定义成就")},onClick={manage=false;creating=true},
+                            enabled=snapshot!=null&&!s.demo&&!s.achievementsLoading&&snapshot.settings.customGoals.size<12,modifier=Modifier.testTag("create-achievement"))
+                        DropdownMenuItem(text={Text("阅读应用")},onClick={manage=false;onLoadApps();reading=true},enabled=snapshot!=null&&!s.demo)
                     }
                 }
             }
+            if(s.demo)Text("虚构演示 · 不写入真实成就",style=MaterialTheme.typography.labelSmall)
         }
         if(s.achievementError!=null)item(span={GridItemSpan(maxLineSpan)}) {
             Column(Modifier.fillMaxWidth().padding(8.dp)) {
@@ -105,18 +110,7 @@ import java.time.LocalDate
             }
         }
         if(s.achievementsLoading)item(span={GridItemSpan(maxLineSpan)}){LinearProgressIndicator(Modifier.fillMaxWidth())}
-        if(snapshot!=null&&snapshot.newIds.isNotEmpty())item(span={GridItemSpan(maxLineSpan)}) {
-            Surface(shape=RoundedCornerShape(18.dp),color=MaterialTheme.colorScheme.secondaryContainer) {
-                Row(Modifier.padding(14.dp),verticalAlignment=Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("有 ${snapshot.newIds.size} 枚徽章新点亮",style=MaterialTheme.typography.titleSmall)
-                        Text("来自已保存的日常，不必额外打卡。",style=MaterialTheme.typography.bodySmall)
-                    }
-                    TextButton(onClick={onSeen(snapshot.newIds)},modifier=Modifier.testTag("achievement-acknowledge")){Text("收下")}
-                }
-            }
-        }
-        item(span={GridItemSpan(maxLineSpan)}) {
+        if(filters)item(span={GridItemSpan(maxLineSpan)}) {
             Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
                 Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     listOf("ALL" to "全部","EARNED" to "已点亮","PENDING" to "进行中","CUSTOM" to "自定义").forEach { (id,label)->
@@ -145,15 +139,27 @@ import java.time.LocalDate
         if(snapshot!=null&&displayed.isEmpty())item(span={GridItemSpan(maxLineSpan)}) {
             Text(if(filter=="CUSTOM")"还没有自定义成就。给自己的日常取一个特别的名字。" else "这里暂时没有徽章。慢慢来，每一段积累都算数。",Modifier.padding(18.dp),style=MaterialTheme.typography.bodyMedium)
         }
+        if(snapshot!=null&&snapshot.newIds.isNotEmpty())item(span={GridItemSpan(maxLineSpan)}) {
+            Surface(shape=RoundedCornerShape(18.dp),color=MaterialTheme.colorScheme.secondaryContainer) {
+                Row(Modifier.padding(14.dp),verticalAlignment=Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("有 ${snapshot.newIds.size} 枚徽章新点亮",style=MaterialTheme.typography.titleSmall)
+                        Text("来自已保存的日常，不必额外打卡。",style=MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(onClick={onSeen(snapshot.newIds)},modifier=Modifier.testTag("achievement-acknowledge")){Text("收下")}
+                }
+            }
+        }
         item(span={GridItemSpan(maxLineSpan)}) {
-            Column(Modifier.padding(vertical=16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                Text("只依据已保存的记录",style=MaterialTheme.typography.titleSmall)
-                if(snapshot!=null&&snapshot.fromDate.isNotEmpty())Text("统计范围：${snapshot.fromDate} 至 ${snapshot.toDate}",style=MaterialTheme.typography.bodySmall)
-                Text("徽章在本机计算，不额外采集数据。未授权或缺失的数据不会被当作达成；删除、排除记录或取消收藏后会重新计算。新排除时段涉及步数时，相应日汇总不计入，避免猜测步数。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick=onRetry,enabled=!s.achievementsLoading){Text("更新成就进度")}
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.Center) {
+                TextButton(onClick={explanation=true}){Text("统计说明")}
+                TextButton(onClick=onRetry,enabled=!s.achievementsLoading){Text("更新进度")}
             }
         }
     }
+    if(explanation)AlertDialog(onDismissRequest={explanation=false},title={Text("勋章统计")},text={
+        Text("只依据已保存的记录计算。未授权或缺失的数据不会被当作达成；删除、排除记录或取消收藏后会重新计算。统计范围：${snapshot?.fromDate.orEmpty()} 至 ${snapshot?.toDate.orEmpty()}。")
+    },confirmButton={TextButton(onClick={explanation=false}){Text("知道了")}})
     val selected=snapshot?.items?.firstOrNull{it.goal.id==selectedId}
     if(selected!=null)ModalBottomSheet(onDismissRequest={selectedId=null},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
         var reveal by remember(selected.goal.id){mutableStateOf(false)}

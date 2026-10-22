@@ -23,18 +23,18 @@ import org.robolectric.annotation.GraphicsMode
 class MainNavigationTest {
     @get:Rule val compose=createAndroidComposeRule<ComponentActivity>()
 
-    @Test fun exactlyThreeTabsCanBeSelectedAndRestored() {
+    @Test fun exactlyTwoTabsCanBeSelectedAndRestored() {
         val restoration=StateRestorationTester(compose)
         restoration.setContent {
             var tab by rememberSaveable { mutableIntStateOf(0) }
             WoTheme(dark=false) { AppNavigation(tab) { tab=it } }
         }
-        compose.onAllNodes(isSelectable()).assertCountEquals(3)
+        compose.onAllNodes(isSelectable()).assertCountEquals(2)
         compose.onNodeWithText("首页").assertIsSelected()
         compose.onNodeWithText("成就").performClick().assertIsSelected()
-        compose.onNodeWithText("设置").performClick().assertIsSelected()
         restoration.emulateSavedInstanceStateRestore()
-        compose.onNodeWithText("设置").assertIsSelected()
+        compose.onNodeWithText("成就").assertIsSelected()
+        compose.onNodeWithText("设置").assertDoesNotExist()
         compose.onNodeWithText("首页").performClick().assertIsSelected()
         listOf("回忆","连接","我的").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
     }

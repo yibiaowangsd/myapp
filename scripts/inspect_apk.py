@@ -22,6 +22,5 @@ with zipfile.ZipFile(apk) as z:
   native.append({'path':info.filename,'pt_load_align':alignments})
 assert "sdkVersion:'29'" in badging and "targetSdkVersion:'36'" in badging
 assert 'android.permission.RECORD_AUDIO' not in permissions and 'android.permission.CAMERA' not in permissions
-offline='Offline' in apk.name or 'personalOffline' in apk.name
-if offline:assert 'android.permission.INTERNET' not in permissions
+assert 'android.permission.INTERNET' in permissions
 print(json.dumps({'apk':apk.name,'sizeBytes':apk.stat().st_size,'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'hasInternet':'android.permission.INTERNET' in permissions,'signature':signature.splitlines(),'native':native,'staticChecks':'PASS','runtimeDeviceTests':'NOT_RUN'},ensure_ascii=False,indent=2))

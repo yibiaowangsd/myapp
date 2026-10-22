@@ -66,6 +66,7 @@ data class EvidenceRow(val episodeId: String, val evidenceKey: String, val snaps
     @Upsert suspend fun putExclusion(row: ExclusionRow)
     @Query("SELECT * FROM daily_summary WHERE date=:date AND zone=:zone") suspend fun summary(date: String, zone: String): SummaryRow?
     @Query("SELECT * FROM daily_summary ORDER BY date DESC LIMIT :limit") suspend fun summaries(limit: Int): List<SummaryRow>
+    @Query("SELECT date FROM daily_summary WHERE zone=:zone ORDER BY date DESC") suspend fun summaryDates(zone:String):List<String>
     @Upsert suspend fun putSummary(row: SummaryRow)
     @Upsert suspend fun putMetrics(rows: List<MetricRow>)
     @Query("DELETE FROM daily_summary WHERE date>=:from AND date<=:to") suspend fun deleteSummaries(from: String, to: String)

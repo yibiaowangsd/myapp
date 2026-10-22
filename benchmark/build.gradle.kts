@@ -16,7 +16,6 @@ android {
     experimentalProperties["android.experimental.self-instrumenting"]=true
     flavorDimensions+="connectivity"
     productFlavors {
-        create("personalOffline"){dimension="connectivity"}
         create("personalEnhanced"){dimension="connectivity"}
     }
     buildTypes {

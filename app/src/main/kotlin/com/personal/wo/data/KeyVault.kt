@@ -59,12 +59,12 @@ class KeyVault(private val context: Context) {
         return try { Mac.getInstance("HmacSHA256").run { init(SecretKeySpec(secret,"HmacSHA256")); doFinal((deviceId+"\u0000"+fields.joinToString("\u0000")).toByteArray()).lowerHex() } } finally { secret.fill(0) }
     }
     fun writeProtected(name:String,plain:ByteArray) {
-        require(name=="enhanced-config");require(plain.size<=16384)
+        require(name in setOf("enhanced-config","shared-sync"));require(plain.size<=16384)
         val cipher=Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE,wrapper());updateAAD(name.toByteArray()) }
         File(context.noBackupFilesDir,"$name.bin").writeBytes(cipher.iv+cipher.doFinal(plain))
     }
     fun readProtected(name:String):ByteArray? {
-        require(name=="enhanced-config");val f=File(context.noBackupFilesDir,"$name.bin");if(!f.exists())return null
+        require(name in setOf("enhanced-config","shared-sync"));val f=File(context.noBackupFilesDir,"$name.bin");if(!f.exists())return null
         val bytes=f.readBytes();require(bytes.size in 28..16412)
         return Cipher.getInstance("AES/GCM/NoPadding").run { init(Cipher.DECRYPT_MODE,wrapper(),GCMParameterSpec(128,bytes.copyOfRange(0,12)));updateAAD(name.toByteArray());doFinal(bytes.copyOfRange(12,bytes.size)) }
     }

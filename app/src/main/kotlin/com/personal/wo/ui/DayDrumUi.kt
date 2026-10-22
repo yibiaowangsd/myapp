@@ -34,7 +34,7 @@ import kotlin.math.roundToInt
 @Composable fun DayDrumHome(s:WoUiState,onChapter:(DayChapter)->Unit,statistics:()->Unit,
     refresh:()->Unit,setup:()->Unit,demo:(Boolean)->Unit,onDate:(LocalDate)->Unit={},
     onThreshold:(Int)->Unit={},today:LocalDate=LocalDate.now(ZoneId.of(s.policy.archiveZone)),onAll:()->Unit={},
-    onSearch:()->Unit={},onImportPhotos:()->Unit=setup,onShare:()->Unit={},onCancelImport:()->Unit={}) {
+    onSearch:()->Unit={},onImportPhotos:()->Unit=setup,onShare:()->Unit={},onCancelImport:()->Unit={},onSettings:()->Unit={}) {
     val day=s.day ?: return
     val date=LocalDate.parse(s.selectedDate)
     val projection=resolvedHomeProjection(s,day)
@@ -59,10 +59,10 @@ import kotlin.math.roundToInt
                 Text(if(s.demo)"生活胶片 · 虚构演示" else "生活胶片",style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold)
             }
             IconButton(onClick=onSearch,modifier=Modifier.testTag("home-search")){Icon(Icons.Outlined.Search,"搜索回忆")}
-            IconButton(onClick=statistics,enabled=day.dayDate==s.selectedDate){Icon(Icons.Outlined.BarChart,"一天统计")}
             Box {
                 IconButton(onClick={menu=true}){Icon(Icons.Outlined.MoreVert,"时间轴选项")}
                 EventCardTheme { DropdownMenu(menu,{menu=false}) {
+                    DropdownMenuItem(text={Text("一天统计")},onClick={menu=false;statistics()},enabled=day.dayDate==s.selectedDate,leadingIcon={Icon(Icons.Outlined.BarChart,null)})
                     DropdownMenuItem(text={Text("分享这一天")},onClick={menu=false;onShare()},enabled=!s.demo&&day.dayDate==s.selectedDate,leadingIcon={Icon(Icons.Outlined.IosShare,null)})
                     DropdownMenuItem(text={Text("导入最近30天照片")},onClick={menu=false;onImportPhotos()},enabled=!s.busy&&!s.photoImportBusy&&!s.demo,leadingIcon={Icon(Icons.Outlined.PhotoLibrary,null)})
                     DropdownMenuItem(text={Text("查看全部片段")},onClick={menu=false;onAll()},leadingIcon={Icon(Icons.Outlined.List,null)})
@@ -71,6 +71,7 @@ import kotlin.math.roundToInt
                     if(s.demo)DropdownMenuItem(text={Text("退出虚构演示")},onClick={menu=false;demo(false)})
                 } }
             }
+            IconButton(onClick=onSettings,modifier=Modifier.testTag("open-settings")){Icon(Icons.Outlined.Settings,"设置")}
         }
         Row(Modifier.fillMaxWidth().padding(horizontal=24.dp).clip(RoundedCornerShape(16.dp))
             .clickable(onClickLabel="选择日期"){calendar=true}.padding(vertical=if(compactHeader)0.dp else 2.dp),

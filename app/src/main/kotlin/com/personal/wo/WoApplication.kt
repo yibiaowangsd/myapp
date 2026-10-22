@@ -13,6 +13,9 @@ import com.personal.wo.health.HuaweiHealthFactory
 import com.personal.wo.health.HuaweiHealthController
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.collect
 import kotlinx.serialization.decodeFromString
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.util.concurrent.atomic.AtomicLong
@@ -38,6 +41,8 @@ class WoApplication : Application(), Configuration.Provider {
             }
             result.fold(onSuccess = {
                 synchronized(this@WoApplication) { currentGraph=it;initializing=false;attempt.complete(it) }
+                recoverableCall { SharedDataWork.schedule(this@WoApplication,it.sharedData.config().enabled) }
+                    .onFailure { error->diagnostics.record("数据同步调度",error) }
             }, onFailure = {
                 candidate?.let { g -> recoverableCall { g.close() } }
                 diagnostics.record("数据库与本地组件初始化",it)
@@ -64,6 +69,7 @@ class Graph(val context: Context) {
     val config = context.assets.open("default_config.json").bufferedReader().use { WoJson.decodeFromString<EngineConfig>(it.readText()).checked() }
     val db: WoDatabase
     val repo: WoRepository
+    val sharedData: SharedDataSync by lazy { SharedDataSync(repo) }
     val huawei: HuaweiHealthController by lazy { HuaweiHealthFactory.create(context,repo) }
     val collector: PullCollectors by lazy { PullCollectors(context,repo,huawei) }
     private data class Submission(val observation: Observation,val generation: Long)
@@ -73,6 +79,11 @@ class Graph(val context: Context) {
         System.loadLibrary("sqlcipher")
         db = Room.databaseBuilder(context,WoDatabase::class.java,"wo.db").openHelperFactory(SupportOpenHelperFactory(vault.password())).setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING).addCallback(DatabaseOpenCallback()).build()
         repo = WoRepository(db,vault,config,context)
+        scope.launch {
+            repo.changes.drop(1).debounce(5000).collect {
+                recoverableCall { SharedDataWork.soon(context) }.onFailure { context.wo().diagnostics.record("数据同步调度",it) }
+            }
+        }
         scope.launch {
             while(isActive) {
                 val first=queue.receive(); val batch=mutableListOf(first)

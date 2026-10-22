@@ -21,8 +21,8 @@ android {
         applicationId = "com.personal.wo"
         minSdk = 29
         targetSdk = 36
-        versionCode = 14
-        versionName = "2.0.0"
+        versionCode = 15
+        versionName = "2.1.0"
         buildConfigField("String", "HUAWEI_APP_ID", "\"\"")
         buildConfigField("String", "HUAWEI_APPROVED_SCOPES", "\"\"")
         buildConfigField("String", "HUAWEI_CERT_SHA256", "\"\"")
@@ -31,7 +31,6 @@ android {
     }
     flavorDimensions += "connectivity"
     productFlavors {
-        create("personalOffline") { dimension = "connectivity"; buildConfigField("boolean", "ENHANCED", "false") }
         create("personalEnhanced") {
             dimension = "connectivity"; buildConfigField("boolean", "ENHANCED", "true")
             buildConfigField("String", "HUAWEI_APP_ID", "\"$huaweiAppId\"")
