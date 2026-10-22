@@ -58,14 +58,18 @@ class KeyVault(private val context: Context) {
         val secret = seed()
         return try { Mac.getInstance("HmacSHA256").run { init(SecretKeySpec(secret,"HmacSHA256")); doFinal((deviceId+"\u0000"+fields.joinToString("\u0000")).toByteArray()).lowerHex() } } finally { secret.fill(0) }
     }
-    fun writeProtected(name:String,plain:ByteArray) {
+    fun writeProtected(name:String,plain:ByteArray)=synchronized(lock) {
         require(name in setOf("enhanced-config","shared-sync","deepseek-config"));require(plain.size<=16384)
         val cipher=Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE,wrapper());updateAAD(name.toByteArray()) }
-        File(context.noBackupFilesDir,"$name.bin").writeBytes(cipher.iv+cipher.doFinal(plain))
+        val target=android.util.AtomicFile(File(context.noBackupFilesDir,"$name.bin"))
+        val output=target.startWrite()
+        try { output.write(cipher.iv+cipher.doFinal(plain));target.finishWrite(output) }
+        catch(error:Throwable) { target.failWrite(output);throw error }
     }
-    fun readProtected(name:String):ByteArray? {
-        require(name in setOf("enhanced-config","shared-sync","deepseek-config"));val f=File(context.noBackupFilesDir,"$name.bin");if(!f.exists())return null
-        val bytes=f.readBytes();require(bytes.size in 28..16412)
-        return Cipher.getInstance("AES/GCM/NoPadding").run { init(Cipher.DECRYPT_MODE,wrapper(),GCMParameterSpec(128,bytes.copyOfRange(0,12)));updateAAD(name.toByteArray());doFinal(bytes.copyOfRange(12,bytes.size)) }
+    fun readProtected(name:String):ByteArray?=synchronized(lock) {
+        require(name in setOf("enhanced-config","shared-sync","deepseek-config"));val f=File(context.noBackupFilesDir,"$name.bin")
+        if(!f.exists()&&!File("${f.path}.bak").exists())return null
+        val bytes=android.util.AtomicFile(f).openRead().use { it.readBytes() };require(bytes.size in 28..16412)
+        Cipher.getInstance("AES/GCM/NoPadding").run { init(Cipher.DECRYPT_MODE,wrapper(),GCMParameterSpec(128,bytes.copyOfRange(0,12)));updateAAD(name.toByteArray());doFinal(bytes.copyOfRange(12,bytes.size)) }
     }
 }

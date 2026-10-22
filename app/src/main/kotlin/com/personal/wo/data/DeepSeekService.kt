@@ -72,6 +72,7 @@ class DeepSeekService(
         val selected=config();check(selected.enabled) { "请先保存并开启 DeepSeek" };selected.checked()
         if(automatic&&(!selected.autoReview||repo.cachedPolicy.paused||!repo.cachedPolicy.requested))return@withLock null
         val generation=repo.cachedPolicy.generation
+        val recordVersion=repo.changes.value
         val zone=ZoneId.of(repo.cachedPolicy.archiveZone);val today=LocalDate.now(zone)
         val through=if(automatic)today.minusDays(1) else today
         if(!automatic)repo.currentDay(today)
@@ -81,7 +82,7 @@ class DeepSeekService(
             .filter { day->day.facts.isNotEmpty()||day.metrics.any { it.value!=null }||day.episodes.any { it.kind!="NOTICE" } }
         if(automatic&&days.none { it.dayDate==through.toString() })return@withLock null
         val before=memory.read();val context=lifeMemoryContext(before,days)
-        check(repo.cachedPolicy.generation==generation&&config()==selected) { "配置已变化，请重新生成" }
+        check(repo.cachedPolicy.generation==generation&&repo.changes.value==recordVersion&&config()==selected) { "记录或配置已变化，请重新生成" }
         // Mark before sending: background restarts cannot repeatedly bill the same day after a timeout.
         if(automatic) {
             val shouldSend=repo.mutex.withLock {
@@ -93,7 +94,8 @@ class DeepSeekService(
         val response=complete(selected,deepSeekMemoryRequest(context,selected.model))
         currentCoroutineContext().ensureActive()
         check(config()==selected) { "DeepSeek 已关闭或配置变化，本次结果未保存" }
-        val next=acceptDeepSeekMemory(context,response,selected.model,System.currentTimeMillis())
+        val next=try { acceptDeepSeekMemory(context,response,selected.model,System.currentTimeMillis()) }
+        catch(_:Exception) { throw IllegalArgumentException("DeepSeek 返回未通过记忆校验，本次结果未保存") }
         memory.commit(next,before.revision,generation)
     }
 }
