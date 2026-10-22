@@ -109,7 +109,7 @@ class SharedDataSync(private val repo:WoRepository) {
         val files=GitHubSharedFiles(selectedConfig) { config()==selectedConfig&&repo.cachedPolicy.generation==generation }
         val result=SharedDataPublisher(files).publish(dates,zone.id,{date->repo.currentDay(LocalDate.parse(date))})
         val now=System.currentTimeMillis()
-        val status=SharedSyncStatus(now,result.total,result.pending,if(result.pending==0)"已同步，可在 ChatGPT 中读取" else "已同步 ${result.total} 天，另有 ${result.pending} 天待同步")
+        val status=SharedSyncStatus(now,result.total,result.pending,if(result.pending==0)"已同步到私有仓库" else "已同步 ${result.total} 天，另有 ${result.pending} 天待同步")
         repo.db.dao().putMeta(MetaRow("shared-sync.status",buildJsonObject {
             put("lastSuccessMs",now);put("days",status.days);put("pending",status.pending);put("message",status.message)
         }.toString()))

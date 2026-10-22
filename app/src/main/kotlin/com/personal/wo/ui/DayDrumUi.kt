@@ -56,7 +56,8 @@ import kotlin.math.roundToInt
                 Surface(shape=CircleShape,color=WoMint) {
                     Text("我",Modifier.padding(horizontal=10.dp,vertical=6.dp),color=Ink,fontWeight=FontWeight.Black,style=MaterialTheme.typography.titleMedium)
                 }
-                Text(if(s.demo)"生活胶片 · 虚构演示" else "生活胶片",style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold)
+                Text(if(s.demo)"生活胶片 · 虚构演示" else "生活胶片",modifier=Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis,
+                    style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold)
             }
             IconButton(onClick=onSearch,modifier=Modifier.testTag("home-search")){Icon(Icons.Outlined.Search,"搜索回忆")}
             IconButton(onClick=statistics,enabled=day.dayDate==s.selectedDate){Icon(Icons.Outlined.BarChart,"一天统计")}

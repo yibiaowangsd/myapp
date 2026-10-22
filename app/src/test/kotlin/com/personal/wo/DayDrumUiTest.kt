@@ -10,10 +10,11 @@ import androidx.compose.foundation.pager.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
@@ -136,6 +137,9 @@ class DayDrumUiTest {
             CompositionLocalProvider(LocalDensity provides Density(density,1.5f)){Shell(dark=true,stats={stats=true})}
         }
         capture("26-chapter-large-dark")
+        compose.onNodeWithText("生活胶片 · 虚构演示").performSemanticsAction(SemanticsActions.GetTextLayoutResult) { action ->
+            val layouts=mutableListOf<TextLayoutResult>();assertTrue(action(layouts));assertEquals(1,layouts.single().lineCount)
+        }
         compose.onNodeWithContentDescription("下一段经历").assertIsDisplayed().performClick()
         compose.onNodeWithTag("drum-selected-time").assertTextEquals("14:00")
         compose.onNodeWithContentDescription("一天统计").performClick();assertTrue(stats)
