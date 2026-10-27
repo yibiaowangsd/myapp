@@ -1,6 +1,7 @@
 package com.personal.wo.core
 
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.LocalDate
@@ -8,12 +9,15 @@ import kotlin.coroutines.*
 
 class SharedDataTest {
     private class Files:SharedFileStore {
-        var private=true;var failIndex=false
+        var private=true;var failIndex=false;var failMemory=false
         val files=mutableMapOf<String,String>();val writes=mutableListOf<String>()
         override suspend fun requirePrivate() { check(private) }
         override suspend fun read(path:String)=files[path]
-        override suspend fun write(path:String,text:String) { if(path=="wo/index.json"&&failIndex)error("offline");writes+=path;files[path]=text }
-        override suspend fun delete(path:String) { files.remove(path) }
+        override suspend fun commit(changes:Map<String,String>,deletions:Set<String>) {
+            if(("wo/index.json" in changes&&failIndex)||("wo/memory.json" in changes&&failMemory))error("offline")
+            val next=files.toMutableMap();deletions.forEach { next.remove(it) };next.putAll(changes)
+            files.clear();files.putAll(next);writes+=changes.keys
+        }
     }
     private fun day(date:String="2026-10-22")=demoDay(LocalDate.parse(date),"Asia/Shanghai")
     // In-memory stores complete synchronously; no coroutine runtime is needed by the core module.
@@ -76,5 +80,74 @@ class SharedDataTest {
         run { SharedDataPublisher(files).publish(listOf(day().dayDate),day().zoneId,{day()},memory=LifeMemory(revision=1)) }
         assertEquals("",WoJson.decodeFromString<LifeMemory>(files.files.getValue("wo/memory.json")).notes)
         assertEquals(listOf("wo/memory.json","wo/index.json"),files.writes)
+    }
+    @Test fun failedMemoryLeavesExistingDayAndIndexUnchangedAndRetryPublishesBoth() {
+        val files=Files();val publisher=SharedDataPublisher(files)
+        run { publisher.publish(listOf(day().dayDate),day().zoneId,{day()},memory=LifeMemory()) }
+        val before=files.files.toMap();files.failMemory=true
+        assertThrows(IllegalStateException::class.java) { run {
+            publisher.publish(listOf(day().dayDate),day().zoneId,{day().copy(headline="changed")},memory=LifeMemory(notes="new",revision=1))
+        } }
+        assertEquals(before,files.files);files.failMemory=false
+        run { publisher.publish(listOf(day().dayDate),day().zoneId,{day().copy(headline="changed")},memory=LifeMemory(notes="new",revision=1)) }
+        val index=WoJson.decodeFromString<SharedDataIndex>(files.files.getValue("wo/index.json"))
+        assertEquals(sharedHash(files.files.getValue("wo/memory.json")),index.memory!!.hash)
+        assertEquals(sharedDayHash(WoJson.parseToJsonElement(files.files.getValue(index.days.single().path)).jsonObject),index.days.single().hash)
+    }
+    @Test fun failedIndexCannotWithdrawAFileOrOverwriteAnIndexedDay() {
+        val files=Files();run { SharedDataPublisher(files).publish(listOf("2026-10-21","2026-10-22"),day().zoneId,{day(it)}) }
+        val before=files.files.toMap();files.failIndex=true
+        assertThrows(IllegalStateException::class.java) { run { SharedDataPublisher(files).publish(listOf("2026-10-22"),day().zoneId,{day(it).copy(headline="changed")}) } }
+        assertEquals(before,files.files)
+    }
+    @Test fun pendingUpdatesKeepThePreviouslyPublishedSnapshot() {
+        val dates=listOf("2026-10-22","2026-10-21");val files=Files()
+        run { SharedDataPublisher(files).publish(dates,day().zoneId,{day(it)}) }
+        val previous=WoJson.decodeFromString<SharedDataIndex>(files.files.getValue("wo/index.json")).days.last()
+        val result=run { SharedDataPublisher(files).publish(dates,day().zoneId,{day(it).copy(headline="changed")},maxChanges=1) }
+        assertEquals(1,result.pending)
+        assertEquals(previous,WoJson.decodeFromString<SharedDataIndex>(files.files.getValue("wo/index.json")).days.last())
+    }
+    @Test fun badHistoricalDateDoesNotBlockOtherDatesOrMemoryAndCanRecover() {
+        val files=Files();val dates=listOf("2026-10-22","2026-10-21")
+        val result=run { SharedDataPublisher(files).publish(dates,day().zoneId,{if(it.endsWith("21"))error("unreadable") else day(it)},memory=LifeMemory(notes="saved")) }
+        assertEquals(1,result.pending);assertEquals(listOf("2026-10-21"),result.failedDates)
+        assertTrue(files.files.containsKey("wo/memory.json"))
+        val recovered=run { SharedDataPublisher(files).publish(dates,day().zoneId,{day(it)},memory=LifeMemory(notes="saved")) }
+        assertEquals(0,recovered.pending);assertEquals(2,recovered.total)
+    }
+    @Test fun largeUnicodeDayIsSplitIntoReadableJsonAndRoundTripsWithoutLoss() {
+        val base=day();val episode=base.episodes.first()
+        val large=base.copy(episodes=(0..4000).map { episode.copy(id="event-$it",title="活动🌏".repeat(20)) })
+        val payload=sharedDay(large);assertTrue(payload.toString().toByteArray().size>SHARED_FILE_BYTES)
+        val files=sharedDayFiles(payload)
+        assertTrue(files.size>2);assertTrue(files.values.all { it.toByteArray().size<=SHARED_FILE_BYTES })
+        files.values.forEach { WoJson.parseToJsonElement(it).jsonObject }
+        assertEquals(payload,run { readSharedDay(files.getValue(sharedDayPath(base.dayDate))) { files[it] } })
+        val part=files.keys.first { it.startsWith("wo/parts/") }
+        assertThrows(IllegalArgumentException::class.java) { run { readSharedDay(files.getValue(sharedDayPath(base.dayDate))) { if(it==part)"{}" else files[it] } } }
+    }
+    @Test fun orphanedLegacyFilesAreAdoptedWithoutReuploadingAndVersionOneCanMigrate() {
+        val files=Files();files.files[sharedDayPath(day().dayDate)]=sharedDay(day()).toString()
+        run { SharedDataPublisher(files).publish(listOf(day().dayDate),day().zoneId,{day()},memory=LifeMemory()) }
+        assertEquals(listOf("wo/memory.json","wo/index.json"),files.writes)
+        val index=WoJson.decodeFromString<SharedDataIndex>(files.files.getValue("wo/index.json"))
+        files.files["wo/index.json"]=WoJson.encodeToString(SharedDataIndex.serializer(),index.copy(schemaVersion=1))
+        files.writes.clear();run { SharedDataPublisher(files).publish(listOf(day().dayDate),day().zoneId,{day()},memory=LifeMemory()) }
+        assertEquals(listOf("wo/index.json"),files.writes)
+    }
+    @Test fun moreThanFortyEightDaysContinueAcrossPublisherInstances() {
+        val files=Files();val dates=(0..51).map { LocalDate.parse("2026-10-22").minusDays(it.toLong()).toString() }
+        val first=run { SharedDataPublisher(files).publish(dates,day().zoneId,{day(it)}) }
+        assertEquals(4,first.pending);assertEquals(48,first.total)
+        val next=run { SharedDataPublisher(files).publish(dates,day().zoneId,{day(it)}) }
+        assertEquals(0,next.pending);assertEquals(52,next.total);assertEquals(4,next.uploaded)
+    }
+    @Test fun cancellationIsNeverTurnedIntoASuccessfulPartialBatch() {
+        val files=Files()
+        assertThrows(java.util.concurrent.CancellationException::class.java) { run {
+            SharedDataPublisher(files).publish(listOf(day().dayDate),day().zoneId,{throw java.util.concurrent.CancellationException()})
+        } }
+        assertTrue(files.files.isEmpty())
     }
 }
