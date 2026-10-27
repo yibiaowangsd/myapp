@@ -11,7 +11,7 @@ import java.util.Base64
 
 class SharedGitHubFilesTest {
     private class Git:SharedGitHubTransport {
-        var private=true;var live="initial";var failBlob=0;var dropPatchResponse=false;var race=false
+        var private=true;var live="initial";var failBlob=0;var dropPatchResponse=false;var race=false;var empty=false
         var requests=0;var patches=0;var mutateAtBlob:(()->Unit)?=null
         val calls=mutableListOf<String>()
         val snapshots=mutableMapOf("initial" to mapOf("wo/memory.json" to "old-memory"))
@@ -20,7 +20,14 @@ class SharedGitHubFilesTest {
         override suspend fun send(method:String,path:String,body:JsonObject?):SharedHttpResponse {
             requests++;calls+="$method $path"
             fun ok(json:JsonObject)=SharedHttpResponse(200,json)
-            if(path=="")return ok(buildJsonObject { put("private",private);put("default_branch","main") })
+            if(path=="")return ok(buildJsonObject { put("private",private);put("default_branch","main");put("size",if(empty)0 else 1) })
+            if(empty&&method=="GET"&&path=="/git/ref/heads/main")return SharedHttpResponse(409,buildJsonObject {})
+            if(method=="PUT"&&path=="/contents/wo/index.json") {
+                val text=Base64.getDecoder().decode(body!!.getValue("content").jsonPrimitive.content).decodeToString()
+                assertTrue(WoJson.decodeFromString(SharedDataIndex.serializer(),text).days.isEmpty())
+                snapshots["bootstrap"]=mapOf("wo/index.json" to text);empty=false;live="bootstrap"
+                return ok(buildJsonObject {})
+            }
             if(method=="GET"&&path=="/git/ref/heads/main")return ok(buildJsonObject { put("object",buildJsonObject { put("sha",live) }) })
             if(method=="GET"&&path.startsWith("/git/commits/"))return ok(buildJsonObject { put("tree",buildJsonObject { put("sha",path.substringAfterLast('/')) }) })
             if(method=="GET"&&path.startsWith("/contents/")) {
@@ -107,5 +114,22 @@ class SharedGitHubFilesTest {
         try { GitHubSharedFiles(transport,wait={}).requirePrivate();fail() }
         catch(e:SharedSyncException) { assertFalse(e.retryable);assertFalse(e.message!!.contains("SECRET")) }
         assertEquals(1,requests)
+    }
+    @Test fun emptyPrivateRepositoryBootstrapsAValidIndexBeforePublishingData()=runBlocking {
+        val git=Git().apply { empty=true };val store=GitHubSharedFiles(git,wait={})
+        val index=WoJson.encodeToString(SharedDataIndex.serializer(),SharedDataIndex(schemaVersion=2,archiveZone="Asia/Shanghai",updatedAtMs=1,
+            days=listOf(SharedDayEntry("2026-10-27","wo/days/2026-10-27.json","hash"))))
+        val contents=files+mapOf("wo/index.json" to index)
+        store.commit(contents,emptySet())
+        assertEquals(contents,git.snapshots[git.live]);assertEquals(1,git.patches)
+    }
+    @Test fun rateLimitBackoffIsBoundedAndThenResumes()=runBlocking {
+        val git=Git();var first=true;val waits=mutableListOf<Long>()
+        val transport=SharedGitHubTransport { method,path,body ->
+            if(first) { first=false;SharedHttpResponse(429,buildJsonObject {},retryAfterMs=120000,limited=true) }
+            else git.send(method,path,body)
+        }
+        GitHubSharedFiles(transport,wait={waits+=it}).commit(files,emptySet())
+        assertEquals(listOf(30000L),waits);assertEquals(files,git.snapshots[git.live])
     }
 }

@@ -46,6 +46,7 @@ class SharedDataSync(private val repo:WoRepository) {
         val selectedConfig=config();if(!selectedConfig.enabled)return@withLock status()
         val previous=status()
         try {
+        saveStatus(previous.copy(message="同步进行中，当前批次尚未确认完整发布"))
         val generation=repo.cachedPolicy.generation
         val memory=LifeMemoryStore(repo).read()
         val zone=ZoneId.of(repo.cachedPolicy.archiveZone);val today=LocalDate.now(zone)

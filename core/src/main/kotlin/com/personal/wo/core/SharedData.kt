@@ -39,21 +39,27 @@ fun sharedDayFiles(payload:JsonObject):Map<String,String> {
     val path=sharedDayPath(date);val text=payload.toString()
     if(text.toByteArray().size<=SHARED_FILE_BYTES)return linkedMapOf(path to text)
     val hash=sharedDayHash(payload);val files=linkedMapOf<String,String>();val parts=mutableListOf<SharedPart>()
-    var fragment=linkedMapOf<String,JsonElement>()
+    var fragment=linkedMapOf<String,JsonElement>();var fragmentBytes=2
     fun flush() {
         if(fragment.isEmpty())return
         val partPath="wo/parts/$date/$hash/${parts.size.toString().padStart(5,'0')}.json"
         val content=JsonObject(fragment).toString()
-        files[partPath]=content;parts+=SharedPart(partPath,sharedHash(content));fragment=linkedMapOf()
+        files[partPath]=content;parts+=SharedPart(partPath,sharedHash(content));fragment=linkedMapOf();fragmentBytes=2
     }
     fun add(key:String,value:JsonElement,array:Boolean) {
-        fun candidate():LinkedHashMap<String,JsonElement> = LinkedHashMap(fragment).apply {
-            put(key,if(array)JsonArray((get(key) as? JsonArray).orEmpty()+value) else value)
+        val valueBytes=value.toString().toByteArray().size
+        fun growth():Int {
+            val previous=fragment[key]
+            if(previous!=null) {
+                require(array&&previous is JsonArray)
+                return valueBytes+if(previous.isEmpty())0 else 1
+            }
+            return (if(fragment.isEmpty())0 else 1)+JsonPrimitive(key).toString().toByteArray().size+1+valueBytes+if(array)2 else 0
         }
-        var next=candidate()
-        if(JsonObject(next).toString().toByteArray().size>PART_BYTES) { flush();next=candidate() }
-        require(JsonObject(next).toString().toByteArray().size<=PART_BYTES) { "单条记录超过分片大小" }
-        fragment=next
+        if(fragmentBytes+growth()>PART_BYTES)flush()
+        val extra=growth();require(fragmentBytes+extra<=PART_BYTES) { "单条记录超过分片大小" }
+        fragment[key]=if(array)JsonArray((fragment[key] as? JsonArray).orEmpty()+value) else value
+        fragmentBytes+=extra
     }
     payload.forEach { (key,value)->
         if(value is JsonArray) {
@@ -154,7 +160,12 @@ class SharedDataPublisher(private val store:SharedFileStore,private val now:()->
             val path=sharedDayPath(date)
             // With no index, adopt already-uploaded legacy bytes rather than uploading history again.
             val remote=if(original==null)store.read(path) else null
-            val reusable=remote?.let { runCatching { sharedDayHash(readSharedDay(it,store::read))==hash }.getOrDefault(false) }==true
+            val reusable=remote?.let {
+                try { sharedDayHash(readSharedDay(it,store::read))==hash }
+                catch(e:CancellationException) { throw e }
+                catch(e:java.io.IOException) { throw e }
+                catch(e:Exception) { false }
+            }==true
             if(!reusable)changes.putAll(encoded)
             existing[date]?.let { deletions+=storedPaths(it)-encoded.keys }
             entries[date]=SharedDayEntry(date,path,hash);uploaded++

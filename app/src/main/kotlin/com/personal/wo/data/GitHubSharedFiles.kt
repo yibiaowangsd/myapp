@@ -64,7 +64,7 @@ class GitHubSharedFiles internal constructor(
         currentCoroutineContext().ensureActive()
         if(!active())throw SharedSyncException("快照检查",true,"记录、记忆或同步配置已变化，本批尚未发布，请重试")
     }
-    private suspend fun request(stage:String,method:String,path:String,body:JsonObject?=null,missing:Boolean=false):JsonObject? {
+    private suspend fun request(stage:String,method:String,path:String,body:JsonObject?=null,missing:Boolean=false,emptyRepository:Boolean=false):JsonObject? {
         repeat(4) { attempt ->
             checkActive()
             val response=try { transport.send(method,path,body) }
@@ -74,6 +74,7 @@ class GitHubSharedFiles internal constructor(
                 wait(1000L shl attempt);return@repeat
             }
             if(missing&&response.status==404)return null
+            if(emptyRepository&&response.status==409)return null
             if(response.status in 200..299)return response.body
             val retryable=response.status in setOf(408,429,500,502,503,504)||(response.status==403&&response.limited)
             if(retryable&&attempt<3) { wait(maxOf(1000L shl attempt,response.retryAfterMs).coerceAtMost(30000));return@repeat }
@@ -97,7 +98,7 @@ class GitHubSharedFiles internal constructor(
         if(initialized)return
         branch=metadata.getValue("default_branch").jsonPrimitive.content
         require(branch.matches(Regex("[A-Za-z0-9_./-]+"))) { "分支名称不兼容" }
-        val ref=request("读取分支","GET","/git/ref/heads/$branch",missing=true)
+        val ref=request("读取分支","GET","/git/ref/heads/$branch",missing=true,emptyRepository=metadata["size"]?.jsonPrimitive?.intOrNull==0)
         head=ref?.getValue("object")?.jsonObject?.getValue("sha")?.jsonPrimitive?.content
         head?.let { tree=request("读取提交","GET","/git/commits/$it")!!.getValue("tree").jsonObject.getValue("sha").jsonPrimitive.content }
         initialized=true
