@@ -44,7 +44,10 @@ class SharedDataViewModel(application:Application):AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             try { val service=app.graph().sharedData;action(service);refreshState(service) }
             catch(e:CancellationException) { throw e }
-            catch(e:Exception) { mutable.update { it.copy(error=e.message ?: "同步暂时未完成，请重试") } }
+            catch(e:Exception) {
+                runCatching { refreshState(app.graph().sharedData) }
+                mutable.update { it.copy(error=if(e is com.personal.wo.data.SharedSyncException)e.message else "同步暂时未完成，请重试") }
+            }
             finally { mutable.update { it.copy(busy=false) } }
         }
     }
