@@ -27,11 +27,40 @@ fun sharedDayHash(payload:JsonObject):String=sharedHash(JsonObject(payload.filte
 
 const val SHARED_FILE_BYTES=524288
 private const val PART_BYTES=240*1024
+private val SHARED_PART_FORMATS=setOf("wo-day-parts","wo-day-text-parts")
+private class LargeSharedValue:RuntimeException()
 @Serializable data class SharedPart(val path:String,val hash:String)
 @Serializable data class SharedDayParts(
     val schemaVersion:Int=2,val format:String="wo-day-parts",val date:String,val timeZone:String,
     val asOfMs:Long,val hash:String,val fields:List<String>,val arrays:List<String>,val parts:List<SharedPart>
 )
+
+/** Lossless fallback when even one nested fact/array element is larger than a normal part. */
+private fun sharedTextDayFiles(payload:JsonObject,text:String,hash:String):Map<String,String> {
+    val date=payload.getValue("date").jsonPrimitive.content
+    val files=linkedMapOf<String,String>();val parts=mutableListOf<SharedPart>();val fragment=StringBuilder()
+    fun flush() {
+        if(fragment.isEmpty())return
+        val path="wo/parts/$date/$hash/${parts.size.toString().padStart(5,'0')}.json"
+        val content=buildJsonObject { put("text",fragment.toString()) }.toString()
+        require(content.toByteArray().size<=PART_BYTES)
+        files[path]=content;parts+=SharedPart(path,sharedHash(content));fragment.setLength(0)
+    }
+    var offset=0;var count=0
+    while(offset<text.length) {
+        val point=text.codePointAt(offset);fragment.appendCodePoint(point);offset+=Character.charCount(point)
+        // At most six encoded bytes per code point, including JSON escapes.
+        if(++count==32000) { flush();count=0 }
+    }
+    flush()
+    val manifest=SharedDayParts(format="wo-day-text-parts",date=date,
+        timeZone=payload.getValue("timeZone").jsonPrimitive.content,asOfMs=payload.getValue("asOfMs").jsonPrimitive.long,
+        hash=hash,fields=payload.keys.toList(),arrays=payload.filterValues { it is JsonArray }.keys.toList(),parts=parts)
+    val directory=WoJson.encodeToString(SharedDayParts.serializer(),manifest)
+    require(directory.toByteArray().size<=SHARED_FILE_BYTES) { "日期分片目录过大" }
+    files[sharedDayPath(date)]=directory
+    return files
+}
 
 /** Each part is valid JSON. Array order and all records survive without truncation. */
 fun sharedDayFiles(payload:JsonObject):Map<String,String> {
@@ -57,15 +86,15 @@ fun sharedDayFiles(payload:JsonObject):Map<String,String> {
             return (if(fragment.isEmpty())0 else 1)+JsonPrimitive(key).toString().toByteArray().size+1+valueBytes+if(array)2 else 0
         }
         if(fragmentBytes+growth()>PART_BYTES)flush()
-        val extra=growth();require(fragmentBytes+extra<=PART_BYTES) { "单条记录超过分片大小" }
+        val extra=growth();if(fragmentBytes+extra>PART_BYTES)throw LargeSharedValue()
         fragment[key]=if(array)JsonArray((fragment[key] as? JsonArray).orEmpty()+value) else value
         fragmentBytes+=extra
     }
-    payload.forEach { (key,value)->
+    try { payload.forEach { (key,value)->
         if(value is JsonArray) {
             if(value.isEmpty())add(key,value,false) else value.forEach { add(key,it,true) }
         } else add(key,value,false)
-    }
+    } } catch(_:LargeSharedValue) { return sharedTextDayFiles(payload,text,hash) }
     flush()
     files[path]=WoJson.encodeToString(SharedDayParts.serializer(),SharedDayParts(date=date,
         timeZone=payload.getValue("timeZone").jsonPrimitive.content,asOfMs=payload.getValue("asOfMs").jsonPrimitive.long,
@@ -77,22 +106,26 @@ fun sharedDayFiles(payload:JsonObject):Map<String,String> {
 /** Used by readers and migrations; verify every part and the reconstructed day. */
 suspend fun readSharedDay(text:String,read:suspend(String)->String?):JsonObject {
     val json=WoJson.parseToJsonElement(text).jsonObject
-    if(json["format"]?.jsonPrimitive?.content!="wo-day-parts")return json
+    if(json["format"]?.jsonPrimitive?.content !in SHARED_PART_FORMATS)return json
     val manifest=WoJson.decodeFromString<SharedDayParts>(text)
     require(manifest.schemaVersion==2&&manifest.parts.isNotEmpty())
-    val values=mutableMapOf<String,JsonElement>()
+    val values=mutableMapOf<String,JsonElement>();val fragments=StringBuilder()
     manifest.parts.forEachIndexed { i,part->
         require(part.path=="wo/parts/${LocalDate.parse(manifest.date)}/${manifest.hash}/${i.toString().padStart(5,'0')}.json")
         val fragment=checkNotNull(read(part.path)) { "缺少日期分片" };require(sharedHash(fragment)==part.hash) { "日期分片校验失败" }
-        WoJson.parseToJsonElement(fragment).jsonObject.forEach { (key,value)->
+        val partJson=WoJson.parseToJsonElement(fragment).jsonObject
+        if(manifest.format=="wo-day-text-parts")fragments.append(partJson.getValue("text").jsonPrimitive.content)
+        else partJson.forEach { (key,value)->
             require(key in manifest.fields)
             if(key in manifest.arrays)values[key]=JsonArray((values[key] as? JsonArray).orEmpty()+value.jsonArray)
             else { require(key !in values);values[key]=value }
         }
     }
-    require(values.keys==manifest.fields.toSet())
-    val payload=JsonObject(manifest.fields.associateWith { values.getValue(it) })
+    if(manifest.format=="wo-day-parts")require(values.keys==manifest.fields.toSet())
+    val payload=if(manifest.format=="wo-day-text-parts")WoJson.parseToJsonElement(fragments.toString()).jsonObject
+        else JsonObject(manifest.fields.associateWith { values.getValue(it) })
     require(payload["date"]?.jsonPrimitive?.content==manifest.date&&payload["timeZone"]?.jsonPrimitive?.content==manifest.timeZone)
+    require(payload["asOfMs"]?.jsonPrimitive?.long==manifest.asOfMs)
     require(sharedDayHash(payload)==manifest.hash) { "日期内容校验失败" }
     return payload
 }
@@ -149,7 +182,7 @@ class SharedDataPublisher(private val store:SharedFileStore,private val now:()->
         suspend fun storedPaths(entry:SharedDayEntry):Set<String> {
             val text=store.read(entry.path) ?: return emptySet()
             val json=WoJson.parseToJsonElement(text).jsonObject
-            if(json["format"]?.jsonPrimitive?.content!="wo-day-parts")return setOf(entry.path)
+            if(json["format"]?.jsonPrimitive?.content !in SHARED_PART_FORMATS)return setOf(entry.path)
             val manifest=WoJson.decodeFromString<SharedDayParts>(text)
             require(manifest.date==entry.date&&manifest.hash==entry.hash)
             require(manifest.parts.withIndex().all { (i,part)->part.path=="wo/parts/${entry.date}/${entry.hash}/${i.toString().padStart(5,'0')}.json" })

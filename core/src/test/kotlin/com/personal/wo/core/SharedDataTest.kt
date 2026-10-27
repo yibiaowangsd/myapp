@@ -186,4 +186,13 @@ class SharedDataTest {
         val second=run { SharedDataPublisher(files).publish(dates,day().zoneId,{day(it)},maxChanges=1) }
         assertEquals(0,second.pending);assertEquals(2,second.total)
     }
+    @Test fun aSingleHugeNestedFactAlsoSplitsWithoutCuttingUnicodeOrLosingContent() {
+        val payload=JsonObject(sharedDay(day())+mapOf("facts" to buildJsonArray {
+            add(buildJsonObject { put("value","超大🌏\\\"\n".repeat(100000)) })
+        }))
+        val files=sharedDayFiles(payload);val manifest=files.getValue(sharedDayPath(day().dayDate))
+        assertEquals("wo-day-text-parts",WoJson.parseToJsonElement(manifest).jsonObject.getValue("format").jsonPrimitive.content)
+        assertTrue(files.values.all { it.toByteArray().size<=SHARED_FILE_BYTES })
+        assertEquals(payload,run { readSharedDay(manifest) { files[it] } })
+    }
 }
