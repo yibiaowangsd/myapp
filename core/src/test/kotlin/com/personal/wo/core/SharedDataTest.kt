@@ -163,4 +163,16 @@ class SharedDataTest {
         assertFalse(files.files.keys.any { it.startsWith("wo/parts/") })
         assertEquals(sharedDay(base),WoJson.parseToJsonElement(files.files.getValue(sharedDayPath(base.dayDate))))
     }
+    @Test fun migratingVersionOneRepairsAMissingOrMismatchedFileEvenWhenItsIndexHashMatchesLocalData() {
+        for(missing in listOf(false,true)) {
+            val files=Files();val path=sharedDayPath(day().dayDate)
+            val index=SharedDataIndex(archiveZone=day().zoneId,updatedAtMs=1,
+                days=listOf(SharedDayEntry(day().dayDate,path,sharedDayHash(sharedDay(day())))))
+            files.files["wo/index.json"]=WoJson.encodeToString(SharedDataIndex.serializer(),index)
+            if(!missing)files.files[path]=sharedDay(day().copy(headline="partial old upload")).toString()
+            run { SharedDataPublisher(files).publish(listOf(day().dayDate),day().zoneId,{day()}) }
+            assertEquals(sharedDay(day()),WoJson.parseToJsonElement(files.files.getValue(path)))
+            assertEquals(2,WoJson.decodeFromString<SharedDataIndex>(files.files.getValue("wo/index.json")).schemaVersion)
+        }
+    }
 }

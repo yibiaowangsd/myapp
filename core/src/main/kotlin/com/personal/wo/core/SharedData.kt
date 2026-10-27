@@ -134,6 +134,13 @@ class SharedDataPublisher(private val store:SharedFileStore,private val now:()->
         val canonical=dates.distinct().sortedDescending();canonical.forEach { LocalDate.parse(it) }
         val entries=existing.filterKeys { it in canonical }.toMutableMap()
         val changes=linkedMapOf<String,String>()
+        suspend fun sameDay(text:String?,hash:String):Boolean {
+            if(text==null)return false
+            return try { sharedDayHash(readSharedDay(text,store::read))==hash }
+            catch(e:CancellationException) { throw e }
+            catch(e:java.io.IOException) { throw e }
+            catch(e:Exception) { false }
+        }
         suspend fun storedPaths(entry:SharedDayEntry):Set<String> {
             val text=store.read(entry.path) ?: return emptySet()
             val json=WoJson.parseToJsonElement(text).jsonObject
@@ -152,20 +159,17 @@ class SharedDataPublisher(private val store:SharedFileStore,private val now:()->
             } catch(e:CancellationException) { throw e }
             catch(e:Exception) { failed+=date;pendingDates+=date;pending++;continue }
             val hash=sharedDayHash(payload)
-            if(existing[date]?.hash==hash)continue
+            val path=sharedDayPath(date)
+            // A v1 writer could have overwritten a day before its index failed. Verify that
+            // migration snapshot instead of trusting an unchanged index hash on its own.
+            val remote=if(original==null||original.schemaVersion==1)store.read(path) else null
+            if(existing[date]?.hash==hash&&(original?.schemaVersion!=1||sameDay(remote,hash)))continue
             if(uploaded>=maxChanges) { pendingDates+=date;pending++;continue }
             val encoded=try { sharedDayFiles(payload) }
             catch(e:CancellationException) { throw e }
             catch(e:Exception) { failed+=date;pendingDates+=date;pending++;continue }
-            val path=sharedDayPath(date)
             // With no index, adopt already-uploaded legacy bytes rather than uploading history again.
-            val remote=if(original==null)store.read(path) else null
-            val reusable=remote?.let {
-                try { sharedDayHash(readSharedDay(it,store::read))==hash }
-                catch(e:CancellationException) { throw e }
-                catch(e:java.io.IOException) { throw e }
-                catch(e:Exception) { false }
-            }==true
+            val reusable=sameDay(remote,hash)
             if(!reusable)changes.putAll(encoded)
             existing[date]?.let { deletions+=storedPaths(it)-encoded.keys }
             entries[date]=SharedDayEntry(date,path,hash);uploaded++
