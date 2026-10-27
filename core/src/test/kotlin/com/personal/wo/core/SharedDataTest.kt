@@ -175,4 +175,15 @@ class SharedDataTest {
             assertEquals(2,WoJson.decodeFromString<SharedDataIndex>(files.files.getValue("wo/index.json")).schemaVersion)
         }
     }
+    @Test fun deferredCorruptLegacyDatesAreNotAdvertisedByTheMigratedIndex() {
+        val files=Files();val dates=listOf("2026-10-22","2026-10-21")
+        val entries=dates.map { SharedDayEntry(it,sharedDayPath(it),sharedDayHash(sharedDay(day(it)))) }
+        files.files["wo/index.json"]=WoJson.encodeToString(SharedDataIndex.serializer(),SharedDataIndex(archiveZone=day().zoneId,updatedAtMs=1,days=entries))
+        val first=run { SharedDataPublisher(files).publish(dates,day().zoneId,{day(it)},maxChanges=1) }
+        assertEquals(1,first.pending)
+        val index=WoJson.decodeFromString<SharedDataIndex>(files.files.getValue("wo/index.json"))
+        assertEquals(listOf("2026-10-22"),index.days.map { it.date });assertEquals(listOf("2026-10-21"),index.pendingDates)
+        val second=run { SharedDataPublisher(files).publish(dates,day().zoneId,{day(it)},maxChanges=1) }
+        assertEquals(0,second.pending);assertEquals(2,second.total)
+    }
 }

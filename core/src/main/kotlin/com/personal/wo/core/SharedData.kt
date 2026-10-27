@@ -141,6 +141,11 @@ class SharedDataPublisher(private val store:SharedFileStore,private val now:()->
             catch(e:java.io.IOException) { throw e }
             catch(e:Exception) { false }
         }
+        val legacyContents=mutableMapOf<String,String?>()
+        if(original?.schemaVersion==1)for(entry in existing.values) {
+            val text=store.read(entry.path);legacyContents[entry.date]=text
+            if(!sameDay(text,entry.hash))entries.remove(entry.date)
+        }
         suspend fun storedPaths(entry:SharedDayEntry):Set<String> {
             val text=store.read(entry.path) ?: return emptySet()
             val json=WoJson.parseToJsonElement(text).jsonObject
@@ -162,8 +167,8 @@ class SharedDataPublisher(private val store:SharedFileStore,private val now:()->
             val path=sharedDayPath(date)
             // A v1 writer could have overwritten a day before its index failed. Verify that
             // migration snapshot instead of trusting an unchanged index hash on its own.
-            val remote=if(original==null||original.schemaVersion==1)store.read(path) else null
-            if(existing[date]?.hash==hash&&(original?.schemaVersion!=1||sameDay(remote,hash)))continue
+            val remote=if(date in legacyContents)legacyContents[date] else if(original==null||original.schemaVersion==1)store.read(path) else null
+            if(existing[date]?.hash==hash&&(original?.schemaVersion!=1||date in entries))continue
             if(uploaded>=maxChanges) { pendingDates+=date;pending++;continue }
             val encoded=try { sharedDayFiles(payload) }
             catch(e:CancellationException) { throw e }
