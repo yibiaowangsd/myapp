@@ -113,8 +113,10 @@ class SharedDataTest {
         val result=run { SharedDataPublisher(files).publish(dates,day().zoneId,{if(it.endsWith("21"))error("unreadable") else day(it)},memory=LifeMemory(notes="saved")) }
         assertEquals(1,result.pending);assertEquals(listOf("2026-10-21"),result.failedDates)
         assertTrue(files.files.containsKey("wo/memory.json"))
+        assertEquals(listOf("2026-10-21"),WoJson.decodeFromString<SharedDataIndex>(files.files.getValue("wo/index.json")).pendingDates)
         val recovered=run { SharedDataPublisher(files).publish(dates,day().zoneId,{day(it)},memory=LifeMemory(notes="saved")) }
         assertEquals(0,recovered.pending);assertEquals(2,recovered.total)
+        assertTrue(WoJson.decodeFromString<SharedDataIndex>(files.files.getValue("wo/index.json")).pendingDates.isEmpty())
     }
     @Test fun largeUnicodeDayIsSplitIntoReadableJsonAndRoundTripsWithoutLoss() {
         val base=day();val episode=base.episodes.first()
@@ -149,5 +151,16 @@ class SharedDataTest {
             SharedDataPublisher(files).publish(listOf(day().dayDate),day().zoneId,{throw java.util.concurrent.CancellationException()})
         } }
         assertTrue(files.files.isEmpty())
+    }
+    @Test fun shrinkingOrWithdrawingAShardedDayRemovesItsOldPartsAtomically() {
+        val files=Files();val base=day();val large=base.copy(episodes=(0..2500).map { base.episodes.first().copy(id="event-$it",title="事件".repeat(50)) })
+        run { SharedDataPublisher(files).publish(listOf(base.dayDate),base.zoneId,{large}) }
+        assertTrue(files.files.keys.any { it.startsWith("wo/parts/") })
+        val before=files.files.toMap();files.failIndex=true
+        assertThrows(IllegalStateException::class.java) { run { SharedDataPublisher(files).publish(emptyList(),base.zoneId,{large}) } }
+        assertEquals(before,files.files);files.failIndex=false
+        run { SharedDataPublisher(files).publish(listOf(base.dayDate),base.zoneId,{base}) }
+        assertFalse(files.files.keys.any { it.startsWith("wo/parts/") })
+        assertEquals(sharedDay(base),WoJson.parseToJsonElement(files.files.getValue(sharedDayPath(base.dayDate))))
     }
 }

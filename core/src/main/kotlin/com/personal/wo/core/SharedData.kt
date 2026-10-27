@@ -11,7 +11,7 @@ import java.util.concurrent.CancellationException
 @Serializable data class SharedMemoryEntry(val path:String="wo/memory.json",val hash:String)
 @Serializable data class SharedDataIndex(
     val schemaVersion:Int=1,val source:String="wo-life-records",val archiveZone:String,
-    val updatedAtMs:Long,val days:List<SharedDayEntry>,val memory:SharedMemoryEntry?=null
+    val updatedAtMs:Long,val days:List<SharedDayEntry>,val memory:SharedMemoryEntry?=null,val pendingDates:List<String> = emptyList()
 )
 data class SharedSyncResult(val uploaded:Int,val pending:Int,val total:Int,val failedDates:List<String> = emptyList())
 interface SharedFileStore {
@@ -145,18 +145,18 @@ class SharedDataPublisher(private val store:SharedFileStore,private val now:()->
         }
         val deletions=mutableSetOf<String>()
         existing.filterKeys { it !in canonical }.values.forEach { deletions+=storedPaths(it) }
-        var uploaded=0;var pending=0;val failed=mutableListOf<String>()
+        var uploaded=0;var pending=0;val failed=mutableListOf<String>();val pendingDates=mutableListOf<String>()
         for(date in canonical) {
             val payload=try {
                 val day=load(date);require(day.dayDate==date&&day.zoneId==zone);sharedDay(day)
             } catch(e:CancellationException) { throw e }
-            catch(e:Exception) { failed+=date;pending++;continue }
+            catch(e:Exception) { failed+=date;pendingDates+=date;pending++;continue }
             val hash=sharedDayHash(payload)
             if(existing[date]?.hash==hash)continue
-            if(uploaded>=maxChanges) { pending++;continue }
+            if(uploaded>=maxChanges) { pendingDates+=date;pending++;continue }
             val encoded=try { sharedDayFiles(payload) }
             catch(e:CancellationException) { throw e }
-            catch(e:Exception) { failed+=date;pending++;continue }
+            catch(e:Exception) { failed+=date;pendingDates+=date;pending++;continue }
             val path=sharedDayPath(date)
             // With no index, adopt already-uploaded legacy bytes rather than uploading history again.
             val remote=if(original==null)store.read(path) else null
@@ -178,8 +178,8 @@ class SharedDataPublisher(private val store:SharedFileStore,private val now:()->
             if(store.read("wo/memory.json")!=text)changes["wo/memory.json"]=text
             SharedMemoryEntry(hash=hash)
         } ?: original?.memory
-        if(original==null||original.schemaVersion!=2||original.archiveZone!=zone||original.days!=days||original.memory!=memoryEntry) {
-            val index=SharedDataIndex(schemaVersion=2,archiveZone=zone,updatedAtMs=now(),days=days,memory=memoryEntry)
+        if(original==null||original.schemaVersion!=2||original.archiveZone!=zone||original.days!=days||original.memory!=memoryEntry||original.pendingDates!=pendingDates) {
+            val index=SharedDataIndex(schemaVersion=2,archiveZone=zone,updatedAtMs=now(),days=days,memory=memoryEntry,pendingDates=pendingDates)
             changes["wo/index.json"]=WoJson.encodeToString(SharedDataIndex.serializer(),index)
         }
         if(changes.isNotEmpty()||deletions.isNotEmpty())store.commit(changes,deletions)
